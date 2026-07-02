@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+npm-cache/
+.npm-cache/
+.env
+*.log
+.DS_Store
+__MACOSX/

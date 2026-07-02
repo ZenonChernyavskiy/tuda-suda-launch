@@ -1,0 +1,27 @@
+{
+  "name": "tuda-suda-tdsd-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "blueprint build",
+    "test": "blueprint test",
+    "deploy:testnet": "blueprint run deployTdsd --testnet",
+    "mint:testnet": "blueprint run mintTdsd --testnet",
+    "transfer:testnet": "blueprint run transferTdsd --testnet",
+    "burn:testnet": "blueprint run burnTdsd --testnet",
+    "get:data": "blueprint run getTdsdData --testnet"
+  },
+  "dependencies": {
+    "@ton/blueprint": "^0.37.0",
+    "@ton/core": "^0.60.0",
+    "@ton/crypto": "^3.3.0",
+    "@ton/sandbox": "^0.31.0",
+    "@ton/test-utils": "^0.5.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
