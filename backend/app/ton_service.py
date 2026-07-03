@@ -282,15 +282,15 @@ def find_matching_jetton_deposit_transaction(
             continue
         if not _addresses_match(destination, target_forms):
             return TonTransactionSearchResult(
-                failed_reason="Получатель Jetton notification не совпадает с project jetton wallet"
+                failed_reason="Получатель пополнения TDSD не совпадает с ожидаемым адресом"
             )
         if sender and not _addresses_match(sender, sender_forms):
             return TonTransactionSearchResult(
-                failed_reason="Отправитель Jetton transfer не совпадает с сохраненным кошельком"
+                failed_reason="Отправитель пополнения не совпадает с сохраненным кошельком"
             )
         if amount_units < int(deposit.amount_units or 0):
             return TonTransactionSearchResult(
-                failed_reason="Сумма Jetton transfer меньше ожидаемой"
+                failed_reason="Сумма пополнения TDSD меньше ожидаемой"
             )
         if not _transaction_after_deposit(transaction, deposit):
             continue

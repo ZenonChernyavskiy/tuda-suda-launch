@@ -902,6 +902,7 @@ def get_or_create_user(
         user.first_name = first_name
         user.last_active_at = datetime.utcnow()
         ensure_referral_code(db, user)
+        apply_referral_on_first_login(db, user, referral_param)
         update_user_trust_metrics(user)
         ensure_user_ton_asset_balance(db, user)
         db.commit()
@@ -1029,7 +1030,11 @@ def auth_telegram(
             payload.init_data,
             TELEGRAM_BOT_TOKEN,
         )
-        referral_param = telegram_user.get("start_param")
+        referral_param = (
+            telegram_user.get("start_param")
+            or payload.referral_param
+            or payload.start_param
+        )
 
     user = get_or_create_user(
         db=db,
@@ -1592,7 +1597,7 @@ def asset_gifts_feed(
     response_model=schemas.AssetGiftLeaderboardResponse,
 )
 def asset_gifts_leaderboard(
-    symbol: Annotated[str, Query(min_length=1, max_length=32)] = "TON",
+    symbol: Annotated[str, Query(min_length=1, max_length=32)] = TDSD_ASSET_SYMBOL,
     db: Session = Depends(get_db),
 ) -> schemas.AssetGiftLeaderboardResponse:
     asset = get_asset_by_symbol(db, symbol)
@@ -1660,7 +1665,7 @@ def create_asset_deposit(
     if not current_user.ton_wallet_address:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Сначала сохраните TON-кошелек в профиле",
+            detail="Сначала сохраните кошелек в профиле",
         )
 
     try:
@@ -1694,7 +1699,7 @@ def create_asset_deposit(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Не удалось создать уникальный asset deposit, попробуйте еще раз",
+            detail="Не удалось создать пополнение, попробуйте еще раз",
         ) from exc
     db.refresh(deposit)
     return serialize_asset_deposit_create(deposit)
@@ -1718,7 +1723,7 @@ def verify_asset_deposit(
     if not deposit:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Asset deposit не найден",
+            detail="Пополнение не найдено",
         )
 
     if deposit.status == "confirmed":
@@ -1730,13 +1735,13 @@ def verify_asset_deposit(
         )
         return asset_deposit_verify_response(
             deposit,
-            "Asset deposit уже подтвержден",
+            "Пополнение уже подтверждено",
             balance,
         )
     if deposit.status == "failed":
         return asset_deposit_verify_response(
             deposit,
-            "Asset deposit уже помечен как failed",
+            "Пополнение уже помечено как неуспешное",
         )
 
     expires_at = deposit.created_at + timedelta(
@@ -1745,13 +1750,13 @@ def verify_asset_deposit(
     if datetime.utcnow() > expires_at:
         mark_asset_deposit_failed(
             deposit,
-            "Транзакция не найдена до истечения timeout",
+            "Транзакция не найдена за отведенное время",
         )
         db.commit()
         db.refresh(deposit)
         return asset_deposit_verify_response(
             deposit,
-            "Время ожидания asset deposit истекло",
+            "Время ожидания пополнения истекло",
         )
 
     try:
@@ -1769,7 +1774,7 @@ def verify_asset_deposit(
         db.refresh(deposit)
         return asset_deposit_verify_response(
             deposit,
-            "Не удалось проверить deposit provider. Попробуйте позже.",
+            "Не удалось проверить пополнение. Попробуйте позже.",
         )
 
     if verification.failed_reason:
@@ -1788,12 +1793,12 @@ def verify_asset_deposit(
         )
 
     if not verification.tx_hash:
-        mark_asset_deposit_failed(deposit, "Provider не вернул tx_hash")
+        mark_asset_deposit_failed(deposit, "Не удалось получить подтверждение транзакции")
         db.commit()
         db.refresh(deposit)
         return asset_deposit_verify_response(
             deposit,
-            "Provider не вернул tx_hash",
+            "Не удалось получить подтверждение транзакции",
         )
 
     used_asset_tx = db.scalar(
@@ -1818,7 +1823,7 @@ def verify_asset_deposit(
         db.refresh(deposit)
         return asset_deposit_verify_response(
             deposit,
-            "Эта transaction уже была использована",
+            "Эта транзакция уже была использована",
         )
 
     deposit.tx_hash = verification.tx_hash
@@ -1836,7 +1841,7 @@ def verify_asset_deposit(
             db.refresh(deposit)
             return asset_deposit_verify_response(
                 deposit,
-                "TDSD purchase не прошел проверку комиссии",
+                "Покупка TDSD не прошла проверку комиссии",
             )
     credit_amount_units = (
         buy_quote.credited_amount_units
@@ -1851,7 +1856,7 @@ def verify_asset_deposit(
         entry_type="deposit",
         related_entity_type="asset_deposit",
         related_entity_id=deposit.id,
-        comment=f"{deposit.asset.symbol} asset deposit #{deposit.id}",
+        comment=f"Пополнение {deposit.asset.symbol} #{deposit.id}",
     )
     if buy_quote:
         if buy_quote.commission_amount_units > 0:
@@ -1867,8 +1872,8 @@ def verify_asset_deposit(
                     balance_after_units=balance.balance_units,
                     comment=(
                         f"{decimal_label(buy_quote.commission_percent)}% "
-                        f"TDSD purchase commission withheld before crediting "
-                        f"deposit #{deposit.id}"
+                        f"комиссия покупки TDSD удержана перед зачислением "
+                        f"пополнения #{deposit.id}"
                     ),
                 )
             )
@@ -1900,7 +1905,7 @@ def verify_asset_deposit(
     db.refresh(current_user)
     return asset_deposit_verify_response(
         deposit,
-        "Asset deposit подтвержден",
+        "Пополнение подтверждено",
         balance,
     )
 

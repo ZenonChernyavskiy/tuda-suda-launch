@@ -38,10 +38,18 @@ export function getTelegramStartParam() {
     return telegramParam;
   }
   const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const webAppData = hashParams.get("tgWebAppData");
+  const webAppDataParams = webAppData ? new URLSearchParams(webAppData) : null;
   return (
     params.get("startapp") ||
     params.get("start") ||
     params.get("ref") ||
+    hashParams.get("tgWebAppStartParam") ||
+    webAppDataParams?.get("start_param") ||
+    hashParams.get("startapp") ||
+    hashParams.get("start") ||
+    hashParams.get("ref") ||
     ""
   );
 }

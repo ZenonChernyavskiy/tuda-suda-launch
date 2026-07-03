@@ -22,6 +22,10 @@ REFERRAL_CODE_ALPHABET = string.ascii_uppercase + string.digits
 REFERRAL_CODE_LENGTH = 8
 
 
+def _telegram_path_part(value: str | None) -> str:
+    return (value or "").strip().lstrip("@").strip("/")
+
+
 def clean_referral_code(code: str | None) -> str | None:
     if not code:
         return None
@@ -59,15 +63,18 @@ def ensure_referral_code(db: Session, user: models.User) -> str:
 def build_referral_link(referral_code: str) -> str:
     code = clean_referral_code(referral_code) or referral_code
     ref_param = f"{REFERRAL_PREFIX}{code}"
-    if TELEGRAM_BOT_USERNAME and TELEGRAM_MINI_APP_SHORT_NAME:
+    bot_username = _telegram_path_part(TELEGRAM_BOT_USERNAME)
+    mini_app_short_name = _telegram_path_part(TELEGRAM_MINI_APP_SHORT_NAME)
+    if bot_username and mini_app_short_name:
         return (
-            f"https://t.me/{TELEGRAM_BOT_USERNAME}/"
-            f"{TELEGRAM_MINI_APP_SHORT_NAME}?startapp={ref_param}"
+            f"https://t.me/{bot_username}/"
+            f"{mini_app_short_name}?startapp={ref_param}"
         )
-    if TELEGRAM_BOT_USERNAME:
-        return f"https://t.me/{TELEGRAM_BOT_USERNAME}?start={ref_param}"
+    if bot_username:
+        return f"https://t.me/{bot_username}?start={ref_param}"
     base_url = FRONTEND_URL.rstrip("/")
-    return f"{base_url}?ref={ref_param}"
+    separator = "&" if "?" in base_url else "?"
+    return f"{base_url}{separator}ref={ref_param}"
 
 
 def apply_referral_on_first_login(

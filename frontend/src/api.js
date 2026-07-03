@@ -166,7 +166,7 @@ export const api = {
   getAssetGiftFeed() {
     return request("/asset-gifts/feed");
   },
-  getAssetGiftLeaderboard(symbol = "TON") {
+  getAssetGiftLeaderboard(symbol = "TDSD") {
     return request(`/asset-gifts/leaderboard?symbol=${encodeURIComponent(symbol)}`);
   },
   getGlobalLedger(filters = {}) {

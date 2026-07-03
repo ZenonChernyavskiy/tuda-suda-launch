@@ -31,16 +31,16 @@ class JettonProvider(AssetProvider):
         amount_units: int,
     ) -> DepositInstructions:
         if not TDSD_DEPOSITS_ENABLED:
-            raise ProviderError("Jetton deposits are disabled until TDSD contract deployment is verified")
+            raise ProviderError("Пополнение TDSD временно недоступно")
         if asset.network != TDSD_NETWORK:
-            raise ProviderError("Jetton provider network does not match configured TDSD_NETWORK")
+            raise ProviderError("Пополнение TDSD временно недоступно")
         if not asset.contract_address or asset.contract_address != TDSD_JETTON_MASTER_ADDRESS:
-            raise ProviderError("TDSD Jetton Master address is not configured for this asset")
+            raise ProviderError("Пополнение TDSD временно недоступно")
         if not TDSD_PROJECT_JETTON_WALLET:
-            raise ProviderError("TDSD_PROJECT_JETTON_WALLET is not configured")
+            raise ProviderError("Пополнение TDSD временно недоступно")
         amount_units = int(amount_units)
         if amount_units <= 0:
-            raise ProviderError("Сумма Jetton deposit должна быть больше нуля")
+            raise ProviderError("Сумма пополнения TDSD должна быть больше нуля")
 
         try:
             target_wallet_address = normalize_ton_wallet_address(TDSD_PROJECT_JETTON_WALLET)
@@ -61,7 +61,7 @@ class JettonProvider(AssetProvider):
         user: models.User,
     ) -> DepositVerificationResult:
         if not TDSD_DEPOSITS_ENABLED:
-            raise ProviderError("Jetton deposits are disabled until TDSD contract deployment is verified")
+            raise ProviderError("Пополнение TDSD временно недоступно")
         try:
             result = verify_jetton_deposit(
                 deposit,
@@ -70,7 +70,7 @@ class JettonProvider(AssetProvider):
             )
         except TonCenterError as exc:
             return DepositVerificationResult(
-                retryable_error=f"Последняя ошибка TON Center API: {str(exc)[:430]}"
+                retryable_error="Не удалось проверить пополнение. Попробуйте позже."
             )
 
         if result.failed_reason:

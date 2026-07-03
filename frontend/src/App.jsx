@@ -30,6 +30,7 @@ const MENU = [
 ];
 
 const AMOUNTS = [1, 5, 10, 25];
+const USER_ASSET_SYMBOL = "TDSD";
 
 const LEADERBOARD_TABS = [
   { id: "karma", label: "Карма", value: "karma" },
@@ -37,7 +38,6 @@ const LEADERBOARD_TABS = [
   { id: "receivers", label: "Получили", value: "total_received" },
 ];
 
-const TON_AMOUNTS = ["0.05", "0.1", "0.5"];
 const DEFAULT_FEE_CONFIG = {
   buy_commission_percent: "1",
   transfer_commission_percent: "10",
@@ -60,6 +60,56 @@ function shortenAddress(address) {
   if (!address) return "";
   if (address.length <= 12) return address;
   return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
+
+function buildTelegramShareUrl(url) {
+  const params = new URLSearchParams({
+    url,
+    text: "Присоединяйтесь к Tuda Suda",
+  });
+  return `https://t.me/share/url?${params.toString()}`;
+}
+
+function userAssets(items) {
+  return (items || []).filter((item) => item?.symbol === USER_ASSET_SYMBOL);
+}
+
+function userDepositMessage(message) {
+  if (!message) return "";
+  if (/Jetton deposits are disabled|contract deployment|TDSD_PROJECT_JETTON_WALLET/i.test(message)) {
+    return "Пополнение TDSD временно недоступно";
+  }
+  if (/TON Center API/i.test(message)) {
+    return "Не удалось проверить пополнение. Попробуйте позже.";
+  }
+  return message
+    .replace(/\bTON Connect\b/g, "кошелек")
+    .replace(/\bTON wallet\b/gi, "кошелек")
+    .replace(/\bTON deposits\b/gi, "пополнения")
+    .replace(/\bnative TON\b/gi, "этого актива")
+    .replace(/\bTON deposit\b/gi, "пополнение")
+    .replace(/\bJetton deposit\b/gi, "пополнение TDSD")
+    .replace(/\bJetton\b/g, "TDSD")
+    .replace(/\bTON-кошелек\b/g, "кошелек")
+    .replace(/\bTON кошелек\b/g, "кошелек")
+    .replace(/\btestnet\b/gi, "")
+    .trim();
 }
 
 function formatTonFromNano(amountNano) {
@@ -146,7 +196,7 @@ function statusLabel(status) {
 }
 
 function depositSymbol(deposit) {
-  return deposit?.symbol || deposit?.asset_symbol || "TON";
+  return deposit?.symbol || deposit?.asset_symbol || USER_ASSET_SYMBOL;
 }
 
 function depositAmountLabel(deposit) {
@@ -155,7 +205,7 @@ function depositAmountLabel(deposit) {
     return `${deposit.amount_display} ${symbol}`;
   }
   if (deposit?.amount_ton !== undefined && deposit?.amount_ton !== null) {
-    return `${deposit.amount_ton} TON`;
+    return `${deposit.amount_ton} ${symbol}`;
   }
   return `${formatTonFromNano(deposit?.amount_units || deposit?.amount_nano || "0")} ${symbol}`;
 }
@@ -172,16 +222,16 @@ function depositPaymentAmountUnits(deposit) {
 
 function assetTypeLabel(type) {
   const labels = {
-    native: "Native",
-    jetton: "Jetton",
-    internal: "Internal",
+    native: "Актив",
+    jetton: "TDSD",
+    internal: "Внутренний",
   };
   return labels[type] || type;
 }
 
 function ledgerTypeLabel(type) {
   const labels = {
-    deposit: "Депозит",
+    deposit: "Пополнение",
     gift_sent: "Подарок отправлен",
     gift_received: "Подарок получен",
     adjustment: "Корректировка",
@@ -215,8 +265,7 @@ function balanceBySymbol(balances, symbol) {
 
 function primaryBalance(balances) {
   return (
-    balanceBySymbol(balances, "TDSD") ||
-    balanceBySymbol(balances, "TON") ||
+    balanceBySymbol(balances, USER_ASSET_SYMBOL) ||
     balances[0]
   );
 }
@@ -259,7 +308,7 @@ function publicTransactionOperation(transaction) {
       : isReferralReward
         ? "Рефералы"
         : transaction.source_type === "asset_gift"
-        ? "Asset gift"
+        ? "TDSD"
         : "Виртуальный дар",
     user: transaction.sender,
     sender: transaction.sender,
@@ -277,7 +326,7 @@ function assetGiftOperation(gift) {
     key: `asset-gift-${gift.id}`,
     date: gift.created_at,
     title: gift.type === "sent" ? "Дар отправлен" : "Дар получен",
-    type: "Asset gift",
+    type: "TDSD",
     user: gift.counterparty_display_name || "Случайный пользователь",
     token: gift.symbol,
     amount: gift.amount_display,
@@ -446,7 +495,8 @@ function HomeScreen({
 }) {
   const [giftOpen, setGiftOpen] = useState(false);
   const user = dashboard.user;
-  const mainBalance = primaryBalance(assetBalances);
+  const visibleAssetBalances = userAssets(assetBalances);
+  const mainBalance = primaryBalance(visibleAssetBalances);
   return (
     <main className="screen">
       <section className="hero">
@@ -456,8 +506,8 @@ function HomeScreen({
           <p>Делай переводы случайным людям</p>
           <span className={tonAddress ? "ton-status connected" : "ton-status"}>
             {tonAddress
-              ? `TON: ${shortenAddress(tonAddress)}`
-              : "TON кошелек не подключен"}
+              ? `Кошелек: ${shortenAddress(tonAddress)}`
+              : "Кошелек не подключен"}
           </span>
         </div>
         <div className="hero-balance">
@@ -498,8 +548,8 @@ function HomeScreen({
         <div className="section-title">
           <h2>Балансы</h2>
         </div>
-        <AssetBalanceList
-          balances={assetBalances}
+          <AssetBalanceList
+          balances={visibleAssetBalances}
           emptyText="Активы появятся после синхронизации с backend."
         />
       </section>
@@ -531,10 +581,12 @@ function SendScreen({
   const [mode, setMode] = useState("virtual");
   const [amount, setAmount] = useState(5);
   const [message, setMessage] = useState("");
-  const [assetSymbol, setAssetSymbol] = useState(assetBalances[0]?.symbol || "TON");
+  const [assetSymbol, setAssetSymbol] = useState(USER_ASSET_SYMBOL);
   const [assetAmount, setAssetAmount] = useState("0.01");
+  const visibleAssetBalances = userAssets(assetBalances);
   const selectedAsset =
-    assetBalances.find((asset) => asset.symbol === assetSymbol) || assetBalances[0];
+    visibleAssetBalances.find((asset) => asset.symbol === assetSymbol) ||
+    visibleAssetBalances[0];
   const transferFeeApplies =
     selectedAsset?.symbol === feeConfig.transfer_fee_asset_symbol;
   const transferFeePercent =
@@ -627,7 +679,7 @@ function SendScreen({
         ) : (
           <form className="send-form" onSubmit={handleAssetSubmit}>
             <div className="amount-grid asset-picker">
-              {assetBalances.map((asset) => (
+              {visibleAssetBalances.map((asset) => (
                 <button
                   className={selectedAsset?.symbol === asset.symbol ? "amount active" : "amount"}
                   key={asset.symbol}
@@ -671,7 +723,7 @@ function SendScreen({
                   </p>
                 ) : null}
                 {transferFeeApplies ? (
-                  <p>Комиссия сети TON оплачивается кошельком отдельно</p>
+                  <p>Сетевая комиссия оплачивается кошельком отдельно</p>
                 ) : null}
               </div>
             ) : null}
@@ -690,7 +742,7 @@ function SendScreen({
               disabled={assetGiftSending || !selectedAsset}
               type="submit"
             >
-              {assetGiftSending ? "Отправляем..." : "Отправить asset-подарок"}
+              {assetGiftSending ? "Отправляем..." : "Отправить TDSD"}
             </button>
           </form>
         )}
@@ -700,7 +752,7 @@ function SendScreen({
 
 function AssetGiftHistoryList({ gifts }) {
   if (!gifts.length) {
-    return <p className="empty">Asset-подарки появятся после первой отправки.</p>;
+    return <p className="empty">TDSD-подарки появятся после первой отправки.</p>;
   }
   return (
     <div className="list">
@@ -708,7 +760,7 @@ function AssetGiftHistoryList({ gifts }) {
         <article className="ledger-row" key={gift.id}>
           <div>
             <strong>
-              {gift.type === "sent" ? "Asset-подарок отправлен" : "Asset-подарок получен"}
+              {gift.type === "sent" ? "TDSD-подарок отправлен" : "TDSD-подарок получен"}
             </strong>
             <span>
               {gift.symbol} · {formatDate(gift.created_at)}
@@ -741,7 +793,7 @@ function HistoryScreen({ transactions, assetGifts }) {
 
       <section className="section">
         <div className="section-title">
-          <h2>Asset-подарки</h2>
+          <h2>TDSD-подарки</h2>
         </div>
         <AssetGiftHistoryList gifts={assetGifts} />
       </section>
@@ -809,15 +861,14 @@ function TonTopUpScreen({
   onPayDeposit,
   onVerifyDeposit,
 }) {
-  const [selectedAmount, setSelectedAmount] = useState("0.05");
+  const [selectedAmount, setSelectedAmount] = useState("1");
   const [customAmount, setCustomAmount] = useState("");
-  const [selectedAssetSymbol, setSelectedAssetSymbol] = useState("TON");
-  const depositAssets = assets.length
-    ? assets
-    : [{ symbol: "TON", name: "Toncoin", decimals: 9, asset_type: "native" }];
+  const [selectedAssetSymbol, setSelectedAssetSymbol] = useState(USER_ASSET_SYMBOL);
+  const depositAssets = userAssets(assets);
   const selectedAsset =
     depositAssets.find((asset) => asset.symbol === selectedAssetSymbol) ||
-    depositAssets[0];
+    depositAssets[0] ||
+    null;
   const selectedBalance = assetBalances.find(
     (balance) => balance.symbol === selectedAsset?.symbol,
   );
@@ -835,9 +886,7 @@ function TonTopUpScreen({
     : "";
   const balanceText = selectedBalance
     ? `${selectedBalance.balance_display} ${selectedBalance.symbol}`
-    : selectedAsset?.symbol === "TON"
-      ? `${formatTonFromNano(tonBalanceNano)} TON`
-      : selectedAsset?.symbol || "";
+    : selectedAsset?.symbol || USER_ASSET_SYMBOL;
 
   async function handleCreate(event) {
     event.preventDefault();
@@ -863,18 +912,18 @@ function TonTopUpScreen({
           />
           <strong>
             {!hasConnectedWallet
-              ? "Кошелек не подключен в TON Connect"
+              ? "Кошелек не подключен"
               : !hasSavedWallet
                 ? "Кошелек подключен, но не сохранен"
                 : isDifferentWallet
                   ? "Подключенный кошелек отличается от сохраненного"
-                  : "Кошелек готов к testnet-депозиту"}
+                  : "Кошелек подключен"}
           </strong>
         </div>
 
         {savedAddress ? (
           <div className="wallet-address">
-            <span>Backend</span>
+            <span>Сохраненный адрес</span>
             <b>{shortenAddress(savedAddress)}</b>
           </div>
         ) : null}
@@ -901,22 +950,8 @@ function TonTopUpScreen({
               </button>
             ))}
           </div>
-          {selectedAsset?.symbol === "TON" ? (
-            <div className="amount-grid ton-amounts">
-              {TON_AMOUNTS.map((value) => (
-                <button
-                  className={!customAmount && selectedAmount === value ? "amount active" : "amount"}
-                  key={value}
-                  onClick={() => {
-                    setSelectedAmount(value);
-                    setCustomAmount("");
-                  }}
-                  type="button"
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
+          {!selectedAsset ? (
+            <p className="empty">Пополнение TDSD временно недоступно</p>
           ) : null}
           <label className="field">
             <span>Своя сумма {selectedAsset?.symbol || ""}</span>
@@ -951,7 +986,7 @@ function TonTopUpScreen({
             }
             type="submit"
           >
-            {depositLoading ? "Создаем..." : "Создать депозит"}
+            {depositLoading ? "Создаем..." : "Создать пополнение"}
           </button>
         </form>
 
@@ -962,27 +997,24 @@ function TonTopUpScreen({
               <b>{depositAmountLabel(currentDeposit)}</b>
             </div>
             <div className="wallet-address">
-              <span>Memo</span>
+              <span>Комментарий</span>
               <b>{currentDeposit.comment}</b>
             </div>
-            <button
-              className="primary"
-              disabled={
-                paying ||
-                currentDeposit.status !== "pending" ||
-                (currentDeposit.provider && currentDeposit.provider !== "ton_native")
-              }
-              onClick={() => onPayDeposit(currentDeposit)}
-              type="button"
-            >
-              {paying ? "Открываем кошелек..." : "Оплатить через TON кошелек"}
-            </button>
-            {currentDeposit.provider && currentDeposit.provider !== "ton_native" ? (
+            {currentDeposit.provider === "ton_native" ? (
+              <button
+                className="primary"
+                disabled={paying || currentDeposit.status !== "pending"}
+                onClick={() => onPayDeposit(currentDeposit)}
+                type="button"
+              >
+                {paying ? "Открываем кошелек..." : "Оплатить через кошелек"}
+              </button>
+            ) : (
               <p className="wallet-note">
-                Для Jetton-депозита отправьте {depositAmountLabel(currentDeposit)} на
-                адрес выше из своего TON-кошелька и обязательно укажите memo.
+                Для пополнения отправьте {depositAmountLabel(currentDeposit)} на
+                указанный адрес из подключенного кошелька и обязательно укажите комментарий.
               </p>
-            ) : null}
+            )}
             <button
               className="secondary"
               disabled={verifying}
@@ -997,10 +1029,10 @@ function TonTopUpScreen({
 
       <section className="section">
         <div className="section-title">
-          <h2>Депозиты</h2>
+          <h2>Пополнения</h2>
         </div>
         {!deposits.length ? (
-          <p className="empty">Депозитов пока нет.</p>
+          <p className="empty">Пополнений пока нет.</p>
         ) : (
           <div className="list">
             {deposits.map((deposit) => (
@@ -1014,10 +1046,10 @@ function TonTopUpScreen({
                   {deposit.tx_hash ? <p>tx: {shortenAddress(deposit.tx_hash)}</p> : null}
                   {deposit.comment ? <p>memo: {deposit.comment}</p> : null}
                   {deposit.status === "failed" && deposit.failed_reason ? (
-                    <p className="failed-reason">{deposit.failed_reason}</p>
+                    <p className="failed-reason">{userDepositMessage(deposit.failed_reason)}</p>
                   ) : null}
                 </div>
-                <b>{deposit.provider || deposit.network}</b>
+                <b>{depositSymbol(deposit)}</b>
               </article>
             ))}
           </div>
@@ -1035,9 +1067,11 @@ function AssetsScreen({
   giftLeaderboard,
   adminEnabled,
 }) {
+  const visibleAssets = userAssets(assets);
+  const visibleBalances = userAssets(balances);
   const senders = giftLeaderboard?.senders || [];
   const receivers = giftLeaderboard?.receivers || [];
-  const inactiveAssets = (allAssets.length ? allAssets : assets).filter(
+  const inactiveAssets = userAssets(allAssets.length ? allAssets : assets).filter(
     (asset) => !asset.is_active,
   );
   return (
@@ -1046,19 +1080,16 @@ function AssetsScreen({
         <div className="section-title">
           <h2>Активы</h2>
         </div>
-        {!assets.length ? (
+        {!visibleAssets.length ? (
           <p className="empty">Активы пока не настроены.</p>
         ) : (
           <div className="list">
-            {assets.map((asset) => (
+            {visibleAssets.map((asset) => (
               <article className="asset-row" key={asset.symbol}>
                 <div>
                   <strong>{asset.symbol}</strong>
                   <span>{asset.name}</span>
-                  <p>
-                    {assetTypeLabel(asset.asset_type)} · {asset.network} · decimals{" "}
-                    {asset.decimals}
-                  </p>
+                  <p>{assetTypeLabel(asset.asset_type)} · точность {asset.decimals}</p>
                   {asset.contract_address ? (
                     <p>{shortenAddress(asset.contract_address)}</p>
                   ) : null}
@@ -1086,13 +1117,12 @@ function AssetsScreen({
                     <strong>{asset.symbol}</strong>
                     <span>{asset.name}</span>
                     <p>
-                      {assetTypeLabel(asset.asset_type)} · {asset.network} · provider{" "}
-                      {asset.provider_key || "не задан"}
+                      {assetTypeLabel(asset.asset_type)} · настройки ожидают публикации
                     </p>
                     {asset.contract_address ? (
                       <p>{shortenAddress(asset.contract_address)}</p>
                     ) : (
-                      <p>Contract address будет задан после Jetton Master.</p>
+                      <p>Адрес актива будет задан после публикации.</p>
                     )}
                   </div>
                   <b>off</b>
@@ -1107,15 +1137,15 @@ function AssetsScreen({
         <div className="section-title">
           <h2>Балансы</h2>
         </div>
-        <AssetBalanceList balances={balances} />
+        <AssetBalanceList balances={visibleBalances} />
       </section>
 
       <section className="section">
         <div className="section-title">
-          <h2>Ledger</h2>
+          <h2>История активов</h2>
         </div>
         {!ledger.length ? (
-          <p className="empty">Ledger появится после первой asset-операции.</p>
+          <p className="empty">История появится после первой операции с TDSD.</p>
         ) : (
           <div className="list">
             {ledger.map((entry) => (
@@ -1139,8 +1169,8 @@ function AssetsScreen({
 
       <section className="section">
         <div className="section-title">
-          <h2>Asset leaderboard</h2>
-          <span>{giftLeaderboard?.symbol || "TON"}</span>
+          <h2>TDSD лидерборд</h2>
+          <span>{giftLeaderboard?.symbol || USER_ASSET_SYMBOL}</span>
         </div>
         <div className="leaderboard-split">
           <div>
@@ -1385,9 +1415,9 @@ function ProfileScreen({
   } else if (hasConnectedWallet && isCurrentAddressSaved) {
     walletStateText = "Кошелек сохранен в профиле";
   } else if (hasConnectedWallet) {
-    walletStateText = "Подключен в TON Connect, но еще не сохранен";
+    walletStateText = "Кошелек подключен, но еще не сохранен";
   } else if (hasSavedWallet) {
-    walletStateText = "Адрес сохранен, TON Connect сейчас отключен";
+    walletStateText = "Адрес сохранен, кошелек сейчас отключен";
   }
 
   return (
@@ -1417,17 +1447,17 @@ function ProfileScreen({
       <section className="section">
         <div className="section-title">
           <h2>Балансы</h2>
-          <span>TON / TDSD</span>
+          <span>TDSD</span>
         </div>
         <AssetBalanceList
-          balances={assetBalances}
+          balances={userAssets(assetBalances)}
           emptyText="Балансы появятся после первого депозита или синхронизации."
         />
       </section>
 
       <section className="section wallet-section">
         <div className="section-title">
-          <h2>TON кошелек</h2>
+          <h2>Кошелек</h2>
         </div>
         <div className="wallet-state">
           <span
@@ -1441,7 +1471,7 @@ function ProfileScreen({
         </div>
         {visibleAddress ? (
           <div className="wallet-address">
-            <span>{hasConnectedWallet ? "TON Connect" : "Backend"}</span>
+            <span>{hasConnectedWallet ? "Подключенный" : "Сохраненный"}</span>
             <b>{shortenAddress(visibleAddress)}</b>
           </div>
         ) : null}
@@ -1453,7 +1483,7 @@ function ProfileScreen({
         ) : null}
         {isDifferentWallet ? (
           <div className="wallet-address muted">
-            <span>Backend</span>
+            <span>Сохраненный</span>
             <b>{shortenAddress(savedAddress)}</b>
           </div>
         ) : null}
@@ -1468,7 +1498,7 @@ function ProfileScreen({
               onClick={onOpenTonConnect}
               type="button"
             >
-              Подключить TON кошелек
+              Подключить кошелек
             </button>
           ) : (
             <>
@@ -1635,7 +1665,7 @@ export default function App() {
     setPublicTransactionsLoading(true);
     try {
       const data = await api.getPublicTransactions();
-      setPublicTransactions(data);
+      setPublicTransactions(data.filter((item) => item.token !== "TON"));
     } finally {
       setPublicTransactionsLoading(false);
     }
@@ -1677,7 +1707,7 @@ export default function App() {
       api.getAssetDeposits(),
     ]);
     setTonBalanceNano(readTonBalanceNano(balance));
-    setTonDeposits(deposits);
+    setTonDeposits(deposits.filter((deposit) => depositSymbol(deposit) === USER_ASSET_SYMBOL));
   }
 
   async function loadAssetData() {
@@ -1687,7 +1717,7 @@ export default function App() {
       api.getAssetLedger(),
       api.getAssetGifts(),
       api.getAssetGiftFeed(),
-      api.getAssetGiftLeaderboard("TON"),
+      api.getAssetGiftLeaderboard(USER_ASSET_SYMBOL),
     ];
     const [
       assetRows,
@@ -1702,9 +1732,9 @@ export default function App() {
     setAssets(assetRows);
     setAdminAssets(adminAssetRows);
     setAssetBalances(balanceRows);
-    setAssetLedger(ledgerRows);
-    setAssetGifts(giftRows);
-    setAssetGiftFeed(giftFeedRows);
+    setAssetLedger(ledgerRows.filter((entry) => entry.symbol === USER_ASSET_SYMBOL));
+    setAssetGifts(giftRows.filter((gift) => gift.symbol === USER_ASSET_SYMBOL));
+    setAssetGiftFeed(giftFeedRows.filter((gift) => gift.symbol === USER_ASSET_SYMBOL));
     setAssetGiftLeaderboard(giftLeaderboardRows);
   }
 
@@ -1807,13 +1837,13 @@ export default function App() {
     try {
       await tonConnectUI.openModal();
     } catch (err) {
-      setError(err.message || "Не удалось открыть TON Connect");
+      setError(userDepositMessage(err.message || "Не удалось открыть кошелек"));
     }
   }
 
   async function handleSaveWallet() {
     if (!connectedTonAddress) {
-      setError("Сначала подключите TON кошелек");
+      setError("Сначала подключите кошелек");
       return;
     }
     setWalletSaving(true);
@@ -1828,9 +1858,9 @@ export default function App() {
         wallet_address: updatedUser.ton_wallet_address,
         connected_at: updatedUser.ton_wallet_connected_at,
       });
-      setSuccess("TON кошелек сохранен");
+      setSuccess("Кошелек сохранен");
     } catch (err) {
-      setError(err.message);
+      setError(userDepositMessage(err.message));
     } finally {
       setWalletSaving(false);
     }
@@ -1852,9 +1882,9 @@ export default function App() {
         wallet_address: updatedUser.ton_wallet_address,
         connected_at: updatedUser.ton_wallet_connected_at,
       });
-      setSuccess("TON кошелек отключен");
+      setSuccess("Кошелек отключен");
     } catch (err) {
-      setError(err.message);
+      setError(userDepositMessage(err.message));
     } finally {
       setWalletSaving(false);
     }
@@ -1884,11 +1914,11 @@ export default function App() {
       await Promise.all([loadTonData(), loadAssetData()]);
       setSuccess(
         deposit.provider === "ton_native"
-          ? "TON deposit создан. Теперь отправьте testnet TON через кошелек."
-          : "Jetton deposit создан. Отправьте токен на project Jetton wallet с указанным memo.",
+          ? "Пополнение создано. Завершите перевод в кошельке."
+          : "Пополнение TDSD создано. Отправьте TDSD на указанный адрес с комментарием.",
       );
     } catch (err) {
-      setError(err.message);
+      setError(userDepositMessage(err.message));
     } finally {
       setDepositLoading(false);
     }
@@ -1896,11 +1926,11 @@ export default function App() {
 
   async function handlePayTonDeposit(deposit) {
     if (deposit.provider && deposit.provider !== "ton_native") {
-      setError("Оплата через TON Connect пока доступна только для native TON");
+      setError("Автоматическая оплата временно недоступна для TDSD");
       return;
     }
     if (!connectedTonAddress) {
-      setError("Сначала подключите TON кошелек");
+      setError("Сначала подключите кошелек");
       return;
     }
     setPaying(true);
@@ -1919,7 +1949,7 @@ export default function App() {
       });
       setSuccess("Транзакция отправлена. Проверьте статус через 5-20 секунд.");
     } catch (err) {
-      setError(err.message || "TON Connect transaction не выполнена");
+      setError(userDepositMessage(err.message || "Транзакция не выполнена"));
     } finally {
       setPaying(false);
     }
@@ -1927,7 +1957,7 @@ export default function App() {
 
   async function handleVerifyTonDeposit(depositId) {
     if (!depositId) {
-      setError("Сначала создайте депозит");
+      setError("Сначала создайте пополнение");
       return;
     }
     setVerifying(true);
@@ -1941,14 +1971,14 @@ export default function App() {
       }
       await Promise.all([loadTonData(), loadAssetData(), loadReferrals()]);
       if (result.deposit.status === "confirmed") {
-        setSuccess("Депозит подтвержден, внутренний баланс обновлен");
+        setSuccess("Пополнение подтверждено, внутренний баланс обновлен");
       } else if (result.deposit.status === "failed") {
-        setError(result.deposit.failed_reason || result.message);
+        setError(userDepositMessage(result.deposit.failed_reason || result.message));
       } else {
-        setSuccess(result.message);
+        setSuccess(userDepositMessage(result.message));
       }
     } catch (err) {
-      setError(err.message);
+      setError(userDepositMessage(err.message));
     } finally {
       setVerifying(false);
     }
@@ -1971,7 +2001,7 @@ export default function App() {
     if (!referrals?.referral_link) return;
     setError("");
     try {
-      await navigator.clipboard.writeText(referrals.referral_link);
+      await copyTextToClipboard(referrals.referral_link);
       setSuccess("Ссылка скопирована");
     } catch {
       setError("Не удалось скопировать ссылку");
@@ -1983,8 +2013,9 @@ export default function App() {
     setError("");
     const webApp = getTelegramWebApp();
     try {
-      if (webApp?.openTelegramLink && referrals.referral_link.includes("t.me/")) {
-        webApp.openTelegramLink(referrals.referral_link);
+      const shareUrl = buildTelegramShareUrl(referrals.referral_link);
+      if (webApp?.openTelegramLink) {
+        webApp.openTelegramLink(shareUrl);
         return;
       }
       if (navigator.share) {
@@ -1997,7 +2028,12 @@ export default function App() {
       }
       await handleCopyReferralLink();
     } catch (err) {
-      setError(err.message || "Не удалось поделиться ссылкой");
+      try {
+        await copyTextToClipboard(referrals.referral_link);
+        setSuccess("Ссылка скопирована");
+      } catch {
+        setError(err.message || "Не удалось поделиться ссылкой");
+      }
     }
   }
 
