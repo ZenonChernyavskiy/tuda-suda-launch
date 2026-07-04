@@ -85,9 +85,9 @@ APP_ENV=production
 ALLOW_MOCK_AUTH=false
 AUTO_INIT_DB=false
 DATABASE_URL=postgresql+psycopg://tuda_suda:<password>@postgres:5432/tuda_suda
-CORS_ORIGINS=https://app.example.com
-PUBLIC_APP_URL=https://app.example.com
-PUBLIC_API_URL=https://api.example.com
+CORS_ORIGINS=https://app.tudasuda.tech
+PUBLIC_APP_URL=https://app.tudasuda.tech
+PUBLIC_API_URL=https://api.tudasuda.tech
 ```
 
 Запуск:
@@ -101,9 +101,9 @@ docker compose logs backend --tail=100
 Проверьте:
 
 ```text
-https://api.example.com/health
-https://api.example.com/ready
-https://app.example.com
+https://api.tudasuda.tech/health
+https://api.tudasuda.tech/ready
+https://app.tudasuda.tech
 ```
 
 ## 4. Telegram Mini App
@@ -130,7 +130,7 @@ ALLOW_MOCK_AUTH=false
 1. Проверьте manifest:
 
 ```text
-https://app.example.com/tonconnect-manifest.json
+https://app.tudasuda.tech/tonconnect-manifest.json
 ```
 
 2. В профиле нажмите “Подключить TON кошелек”.
@@ -178,7 +178,7 @@ cp .env.contracts.example .env.contracts
 Заполните:
 
 ```env
-TDSD_METADATA_URL=https://app.example.com/tdsd-metadata.json
+TDSD_METADATA_URL=https://app.tudasuda.tech/tdsd-metadata.json
 TDSD_OWNER_ADDRESS=<admin wallet>
 TDSD_PROJECT_WALLET_ADDRESS=<project owner wallet>
 ```

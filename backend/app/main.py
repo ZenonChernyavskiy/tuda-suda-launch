@@ -37,6 +37,7 @@ from .config import (
     TELEGRAM_BOT_TOKEN,
     TDSD_ASSET_SYMBOL,
     TDSD_DEPOSITS_ENABLED,
+    TDSD_FIXED_PRICE_TON,
     TDSD_JETTON_MASTER_ADDRESS,
     TDSD_PROJECT_JETTON_WALLET,
     TON_NETWORK,
@@ -49,6 +50,7 @@ from .database import get_db
 from .fee_service import (
     calculate_buy_commission,
     calculate_purchase_fee,
+    calculate_tdsd_fixed_price_quote,
     calculate_transfer_fee,
     decimal_label,
 )
@@ -385,6 +387,12 @@ def serialize_asset_deposit(
     tx_hash = deposit.tx_hash
     if tx_hash and tx_hash.startswith("pending:"):
         tx_hash = None
+    fixed_price_quote = None
+    if deposit.provider == "tdsd_fixed_price":
+        fixed_price_quote = calculate_tdsd_fixed_price_quote(
+            int(deposit.amount_units or 0),
+            deposit.asset.decimals,
+        )
     return schemas.AssetDepositPublic(
         id=deposit.id,
         asset_id=deposit.asset_id,
@@ -396,6 +404,19 @@ def serialize_asset_deposit(
         amount_display=format_asset_units(
             deposit.amount_units or 0,
             deposit.asset.decimals,
+        ),
+        payment_amount_nano=(
+            fixed_price_quote.payment_amount_nano if fixed_price_quote else None
+        ),
+        payment_amount_ton=(
+            format_asset_units(fixed_price_quote.payment_amount_nano, 9)
+            if fixed_price_quote
+            else None
+        ),
+        fixed_price_ton=(
+            decimal_label(fixed_price_quote.fixed_price_ton)
+            if fixed_price_quote
+            else None
         ),
         tx_hash=tx_hash,
         comment=deposit.comment,
@@ -411,6 +432,12 @@ def serialize_asset_deposit(
 def serialize_asset_deposit_create(
     deposit: models.AssetDeposit,
 ) -> schemas.AssetDepositCreateResponse:
+    fixed_price_quote = None
+    if deposit.provider == "tdsd_fixed_price":
+        fixed_price_quote = calculate_tdsd_fixed_price_quote(
+            int(deposit.amount_units or 0),
+            deposit.asset.decimals,
+        )
     return schemas.AssetDepositCreateResponse(
         deposit_id=deposit.id,
         asset_id=deposit.asset_id,
@@ -421,6 +448,19 @@ def serialize_asset_deposit_create(
         amount_display=format_asset_units(
             deposit.amount_units or 0,
             deposit.asset.decimals,
+        ),
+        payment_amount_nano=(
+            fixed_price_quote.payment_amount_nano if fixed_price_quote else None
+        ),
+        payment_amount_ton=(
+            format_asset_units(fixed_price_quote.payment_amount_nano, 9)
+            if fixed_price_quote
+            else None
+        ),
+        fixed_price_ton=(
+            decimal_label(fixed_price_quote.fixed_price_ton)
+            if fixed_price_quote
+            else None
         ),
         target_wallet_address=deposit.target_wallet_address,
         comment=deposit.comment,
@@ -999,6 +1039,13 @@ def readiness(db: Session = Depends(get_db)) -> schemas.HealthResponse:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="TDSD asset не готов к Jetton deposits",
             )
+    else:
+        tdsd_asset = get_asset_by_symbol(db, TDSD_ASSET_SYMBOL)
+        if not tdsd_asset or not tdsd_asset.is_active or not PROJECT_TON_WALLET:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="TDSD fixed-price покупка не готова",
+            )
     return schemas.HealthResponse(status="ready", database="connected")
 
 
@@ -1156,6 +1203,8 @@ def fees_config() -> schemas.FeeConfigPublic:
     return schemas.FeeConfigPublic(
         buy_commission_percent=decimal_label(BUY_COMMISSION_PERCENT),
         buy_fee_percent=decimal_label(BUY_COMMISSION_PERCENT),
+        tdsd_fixed_price_ton=decimal_label(TDSD_FIXED_PRICE_TON),
+        tdsd_per_ton=decimal_label(Decimal("1") / TDSD_FIXED_PRICE_TON),
         transfer_commission_percent=decimal_label(TRANSFER_COMMISSION_PERCENT),
         purchase_fee_percent=decimal_label(BUY_COMMISSION_PERCENT),
         purchase_min_fee_ton="0",

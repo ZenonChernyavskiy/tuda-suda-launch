@@ -28,6 +28,7 @@ TREASURY_USER_ID = os.getenv("TREASURY_USER_ID")
 TREASURY_USER_ID = int(TREASURY_USER_ID) if TREASURY_USER_ID else None
 BUY_COMMISSION_PERCENT = Decimal(os.getenv("BUY_COMMISSION_PERCENT", "1"))
 TRANSFER_COMMISSION_PERCENT = Decimal(os.getenv("TRANSFER_COMMISSION_PERCENT", "10"))
+TDSD_FIXED_PRICE_TON = Decimal(os.getenv("TDSD_FIXED_PRICE_TON", "0.1"))
 TREASURY_WALLET_ADDRESS = os.getenv(
     "TREASURY_WALLET_ADDRESS",
     "UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6",
@@ -70,7 +71,7 @@ REFERRAL_REWARD_ASSET_SYMBOL = os.getenv(
     "REFERRAL_REWARD_ASSET_SYMBOL",
     TDSD_ASSET_SYMBOL,
 ).strip().upper()
-TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "rudasuda_tdsd_bot").strip().lstrip("@")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "tudasuda_tdsd_bot").strip().lstrip("@")
 TELEGRAM_MINI_APP_SHORT_NAME = os.getenv("TELEGRAM_MINI_APP_SHORT_NAME", "").strip()
 FRONTEND_URL = os.getenv("FRONTEND_URL", PUBLIC_APP_URL or "https://app.tudasuda.tech").strip()
 
@@ -125,6 +126,8 @@ def validate_production_settings() -> None:
     ):
         if value < 0 or value >= 100:
             errors.append(f"{env_name} must be between 0 and 100")
+    if TDSD_FIXED_PRICE_TON <= 0:
+        errors.append("TDSD_FIXED_PRICE_TON must be greater than 0")
     if not REFERRAL_REWARD_ASSET_SYMBOL:
         errors.append("REFERRAL_REWARD_ASSET_SYMBOL is required")
     if REFERRALS_ENABLED and IS_PRODUCTION and not TELEGRAM_BOT_USERNAME:
@@ -150,5 +153,7 @@ def validate_production_settings() -> None:
         errors.append(
             "TDSD_JETTON_MASTER_ADDRESS and TDSD_PROJECT_JETTON_WALLET are required when TDSD_DEPOSITS_ENABLED=true"
         )
+    if not TDSD_DEPOSITS_ENABLED and not PROJECT_TON_WALLET:
+        errors.append("PROJECT_TON_WALLET is required when TDSD_DEPOSITS_ENABLED=false")
     if errors:
         raise RuntimeError("Invalid production settings: " + "; ".join(errors))

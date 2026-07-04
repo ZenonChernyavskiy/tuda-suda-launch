@@ -175,18 +175,18 @@ docker compose logs backend --tail=100
 1. Поднять VPS с Ubuntu 22.04/24.04.
 2. Установить Docker и Docker Compose plugin.
 3. Настроить DNS:
-   - `app.example.com` на frontend;
-   - `api.example.com` на backend.
+   - `app.tudasuda.tech` на frontend;
+   - `api.tudasuda.tech` на backend.
 4. Настроить HTTPS reverse proxy:
    - Caddy, Traefik, Nginx Proxy Manager или nginx + certbot.
 5. Заполнить `.env.production`.
 6. Запустить Docker Compose.
 7. Проверить:
-   - `https://api.example.com/health`
-   - `https://api.example.com/ready`
-   - `https://app.example.com`
-   - `https://app.example.com/tonconnect-manifest.json`
-   - `https://app.example.com/tdsd-metadata.json`
+   - `https://api.tudasuda.tech/health`
+   - `https://api.tudasuda.tech/ready`
+   - `https://app.tudasuda.tech`
+   - `https://app.tudasuda.tech/tonconnect-manifest.json`
+   - `https://app.tudasuda.tech/tdsd-metadata.json`
 
 Подробный путь описан в `DEPLOYMENT.md`.
 
@@ -215,7 +215,7 @@ TELEGRAM_BOT_TOKEN=<bot token>
 Frontend env:
 
 ```env
-VITE_TONCONNECT_MANIFEST_URL=https://app.example.com/tonconnect-manifest.json
+VITE_TONCONNECT_MANIFEST_URL=https://app.tudasuda.tech/tonconnect-manifest.json
 ```
 
 Manifest:
@@ -241,7 +241,7 @@ cp .env.contracts.example .env.contracts
 Заполнить:
 
 ```env
-TDSD_METADATA_URL=https://app.example.com/tdsd-metadata.json
+TDSD_METADATA_URL=https://app.tudasuda.tech/tdsd-metadata.json
 TDSD_OWNER_ADDRESS=<admin wallet>
 TDSD_PROJECT_WALLET_ADDRESS=<project owner wallet>
 ```

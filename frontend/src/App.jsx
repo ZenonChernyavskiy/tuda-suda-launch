@@ -43,6 +43,8 @@ const DEFAULT_FEE_CONFIG = {
   transfer_commission_percent: "10",
   purchase_fee_percent: "1",
   purchase_min_fee_ton: "0",
+  tdsd_fixed_price_ton: "0.1",
+  tdsd_per_ton: "10",
   transfer_fee_percent: "10",
   transfer_fee_asset_symbol: "TDSD",
   treasury_wallet_address: "",
@@ -175,6 +177,18 @@ function calculateRecipientDisplay(amountDisplay, asset, feePercent) {
   }
 }
 
+function calculateFixedPricePaymentDisplay(amountDisplay, asset, fixedPriceTon) {
+  if (!asset || !fixedPriceTon) return "";
+  try {
+    const tdsdUnits = BigInt(displayAmountToUnits(amountDisplay || "0", asset.decimals));
+    const priceNano = BigInt(displayAmountToUnits(fixedPriceTon, 9));
+    const scale = 10n ** BigInt(asset.decimals);
+    return unitsToDisplay((tdsdUnits * priceNano) / scale, 9);
+  } catch {
+    return "";
+  }
+}
+
 function readTonBalanceNano(payload) {
   if (payload?.ton_balance_nano !== undefined && payload?.ton_balance_nano !== null) {
     return String(payload.ton_balance_nano);
@@ -211,6 +225,9 @@ function depositAmountLabel(deposit) {
 }
 
 function depositPaymentAmountUnits(deposit) {
+  if (deposit?.payment_amount_nano !== undefined && deposit?.payment_amount_nano !== null) {
+    return String(deposit.payment_amount_nano);
+  }
   if (deposit?.amount_units !== undefined && deposit?.amount_units !== null) {
     return String(deposit.amount_units);
   }
@@ -281,7 +298,7 @@ function transactionOperation(transaction) {
     title: transactionTitle(transaction),
     type: "Виртуальный дар",
     user: "Случайный пользователь",
-    token: "монеты",
+    token: "TDSD",
     amount: String(transaction.amount),
     direction: transaction.type === "sent" ? "Списание" : "Зачисление",
     directionRaw: transaction.type === "sent" ? "debit" : "credit",
@@ -302,7 +319,7 @@ function publicTransactionOperation(transaction) {
         ? "Комиссия сервиса"
         : transaction.source_type === "asset_gift"
         ? "Дар токена"
-        : "Дар монет",
+        : "Дар TDSD",
     type: isFee
       ? "Системная операция"
       : isReferralReward
@@ -515,7 +532,7 @@ function HomeScreen({
           <strong>
             {mainBalance
               ? `${mainBalance.balance_display} ${mainBalance.symbol}`
-              : `${user.balance} монет`}
+              : `${user.balance} ${USER_ASSET_SYMBOL}`}
           </strong>
         </div>
       </section>
@@ -530,8 +547,8 @@ function HomeScreen({
       <section className="section cta-section">
         <div>
           <span className="eyebrow">Дар случайному человеку</span>
-          <h2>{giftOpen ? "Выберите токен и сумму" : "Сделать доброе движение"}</h2>
-          <p>Отправляйте монеты TDSD внутри приложения. Получатель выбирается случайно.</p>
+          <h2>{giftOpen ? "Выберите сумму TDSD" : "Сделать доброе движение"}</h2>
+          <p>Отправляйте TDSD внутри приложения. Получатель выбирается случайно.</p>
         </div>
         <button
           className="primary"
@@ -550,7 +567,7 @@ function HomeScreen({
         </div>
           <AssetBalanceList
           balances={visibleAssetBalances}
-          emptyText="Активы появятся после синхронизации с backend."
+          emptyText="TDSD появится после синхронизации."
         />
       </section>
 
@@ -570,41 +587,17 @@ function HomeScreen({
 }
 
 function SendScreen({
-  balance,
-  onSend,
-  sending,
   assetBalances,
   onSendAssetGift,
   assetGiftSending,
-  feeConfig,
 }) {
-  const [mode, setMode] = useState("virtual");
-  const [amount, setAmount] = useState(5);
   const [message, setMessage] = useState("");
   const [assetSymbol, setAssetSymbol] = useState(USER_ASSET_SYMBOL);
-  const [assetAmount, setAssetAmount] = useState("0.01");
+  const [assetAmount, setAssetAmount] = useState("1");
   const visibleAssetBalances = userAssets(assetBalances);
   const selectedAsset =
     visibleAssetBalances.find((asset) => asset.symbol === assetSymbol) ||
     visibleAssetBalances[0];
-  const transferFeeApplies =
-    selectedAsset?.symbol === feeConfig.transfer_fee_asset_symbol;
-  const transferFeePercent =
-    feeConfig.transfer_commission_percent || feeConfig.transfer_fee_percent;
-  const transferFeeLabel = transferFeeApplies
-    ? `${transferFeePercent}%`
-    : "0%";
-  const recipientDisplay = transferFeeApplies
-    ? calculateRecipientDisplay(assetAmount, selectedAsset, transferFeePercent)
-    : selectedAsset
-      ? calculateRecipientDisplay(assetAmount, selectedAsset, "0")
-      : "";
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    await onSend({ amount, message: message.trim() || null });
-    setMessage("");
-  }
 
   async function handleAssetSubmit(event) {
     event.preventDefault();
@@ -623,73 +616,13 @@ function SendScreen({
         <div className="section-title">
           <h2>Отправить подарок</h2>
           <span>
-            {mode === "virtual"
-              ? `${balance} монет`
-              : selectedAsset
-                ? `${selectedAsset.balance_display} ${selectedAsset.symbol}`
-                : "нет активов"}
+            {selectedAsset
+              ? `${selectedAsset.balance_display} ${selectedAsset.symbol}`
+              : "TDSD недоступен"}
           </span>
         </div>
 
-        <div className="segments gift-mode">
-          <button
-            className={mode === "virtual" ? "active" : ""}
-            onClick={() => setMode("virtual")}
-            type="button"
-          >
-            Монеты
-          </button>
-          <button
-            className={mode === "asset" ? "active" : ""}
-            onClick={() => setMode("asset")}
-            type="button"
-          >
-            Активы
-          </button>
-        </div>
-
-        {mode === "virtual" ? (
-          <form className="send-form" onSubmit={handleSubmit}>
-            <div className="amount-grid">
-              {AMOUNTS.map((value) => (
-                <button
-                  className={amount === value ? "amount active" : "amount"}
-                  key={value}
-                  onClick={() => setAmount(value)}
-                  type="button"
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-            <label className="field">
-              <span>Анонимное сообщение</span>
-              <textarea
-                maxLength={500}
-                onChange={(event) => setMessage(event.target.value)}
-                placeholder="Напишите пару теплых слов"
-                rows={5}
-                value={message}
-              />
-            </label>
-            <button className="primary" disabled={sending} type="submit">
-              {sending ? "Отправляем..." : "Отправить случайному человеку"}
-            </button>
-          </form>
-        ) : (
           <form className="send-form" onSubmit={handleAssetSubmit}>
-            <div className="amount-grid asset-picker">
-              {visibleAssetBalances.map((asset) => (
-                <button
-                  className={selectedAsset?.symbol === asset.symbol ? "amount active" : "amount"}
-                  key={asset.symbol}
-                  onClick={() => setAssetSymbol(asset.symbol)}
-                  type="button"
-                >
-                  {asset.symbol}
-                </button>
-              ))}
-            </div>
             {selectedAsset ? (
               <div className="wallet-address">
                 <span>Доступно</span>
@@ -698,35 +631,19 @@ function SendScreen({
                 </b>
               </div>
             ) : (
-              <p className="empty">Нет доступных активов.</p>
+              <p className="empty">TDSD пока недоступен.</p>
             )}
             <label className="field">
-              <span>Сумма</span>
+              <span>Сумма TDSD</span>
               <input
                 inputMode="decimal"
                 min="0"
                 onChange={(event) => setAssetAmount(event.target.value)}
-                placeholder="Например 0.01"
+                placeholder="Например 1"
                 type="text"
                 value={assetAmount}
               />
             </label>
-            {selectedAsset ? (
-              <div className="fee-note">
-                <p>
-                  Вы отправляете: {assetAmount || "0"} {selectedAsset.symbol}
-                </p>
-                <p>Комиссия платформы: {transferFeeLabel}</p>
-                {recipientDisplay ? (
-                  <p>
-                    Получатель получит: {recipientDisplay} {selectedAsset.symbol}
-                  </p>
-                ) : null}
-                {transferFeeApplies ? (
-                  <p>Сетевая комиссия оплачивается кошельком отдельно</p>
-                ) : null}
-              </div>
-            ) : null}
             <label className="field">
               <span>Анонимное сообщение</span>
               <textarea
@@ -745,7 +662,6 @@ function SendScreen({
               {assetGiftSending ? "Отправляем..." : "Отправить TDSD"}
             </button>
           </form>
-        )}
       </section>
   );
 }
@@ -880,9 +796,13 @@ function TonTopUpScreen({
   const amount = customAmount.trim() || selectedAmount;
   const buyCommissionPercent =
     feeConfig?.buy_commission_percent || feeConfig?.purchase_fee_percent || "1";
+  const fixedPriceTon = feeConfig?.tdsd_fixed_price_ton || "0.1";
   const buyCommissionApplies = selectedAsset?.symbol === "TDSD";
   const buyCreditedDisplay = buyCommissionApplies
     ? calculateRecipientDisplay(amount, selectedAsset, buyCommissionPercent)
+    : "";
+  const paymentDisplay = buyCommissionApplies
+    ? calculateFixedPricePaymentDisplay(amount, selectedAsset, fixedPriceTon)
     : "";
   const balanceText = selectedBalance
     ? `${selectedBalance.balance_display} ${selectedBalance.symbol}`
@@ -954,22 +874,23 @@ function TonTopUpScreen({
             <p className="empty">Пополнение TDSD временно недоступно</p>
           ) : null}
           <label className="field">
-            <span>Своя сумма {selectedAsset?.symbol || ""}</span>
+            <span>Сумма TDSD</span>
             <input
               inputMode="decimal"
               min="0"
               onChange={(event) => setCustomAmount(event.target.value)}
-              placeholder="Например 0.2"
+              placeholder="Например 10"
               type="text"
               value={customAmount}
             />
           </label>
           {buyCommissionApplies ? (
             <div className="fee-note">
+              <p>Курс: 1 TDSD = {fixedPriceTon} TON</p>
               <p>
                 Покупка: {amount || "0"} {selectedAsset.symbol}
               </p>
-              <p>Комиссия платформы: {buyCommissionPercent}%</p>
+              <p>К оплате: {paymentDisplay || "0"} TON</p>
               <p>
                 На баланс будет зачислено: {buyCreditedDisplay || "0"} {selectedAsset.symbol}
               </p>
@@ -986,21 +907,27 @@ function TonTopUpScreen({
             }
             type="submit"
           >
-            {depositLoading ? "Создаем..." : "Создать пополнение"}
+            {depositLoading ? "Создаем..." : "Купить TDSD"}
           </button>
         </form>
 
         {currentDeposit ? (
           <div className="deposit-box">
             <div className="wallet-address">
-              <span>Сумма</span>
+              <span>К покупке</span>
               <b>{depositAmountLabel(currentDeposit)}</b>
             </div>
+            {currentDeposit.payment_amount_ton ? (
+              <div className="wallet-address">
+                <span>К оплате</span>
+                <b>{currentDeposit.payment_amount_ton} TON</b>
+              </div>
+            ) : null}
             <div className="wallet-address">
               <span>Комментарий</span>
               <b>{currentDeposit.comment}</b>
             </div>
-            {currentDeposit.provider === "ton_native" ? (
+            {["ton_native", "tdsd_fixed_price"].includes(currentDeposit.provider) ? (
               <button
                 className="primary"
                 disabled={paying || currentDeposit.status !== "pending"}
@@ -1011,7 +938,7 @@ function TonTopUpScreen({
               </button>
             ) : (
               <p className="wallet-note">
-                Для пополнения отправьте {depositAmountLabel(currentDeposit)} на
+                Для покупки отправьте {depositAmountLabel(currentDeposit)} на
                 указанный адрес из подключенного кошелька и обязательно укажите комментарий.
               </p>
             )}
@@ -1078,10 +1005,10 @@ function AssetsScreen({
     <main className="screen">
       <section className="section">
         <div className="section-title">
-          <h2>Активы</h2>
+          <h2>TDSD</h2>
         </div>
         {!visibleAssets.length ? (
-          <p className="empty">Активы пока не настроены.</p>
+          <p className="empty">TDSD пока не настроен.</p>
         ) : (
           <div className="list">
             {visibleAssets.map((asset) => (
@@ -1104,11 +1031,11 @@ function AssetsScreen({
       {adminEnabled ? (
         <section className="section dev-section">
           <div className="section-title">
-            <h2>Будущие активы</h2>
+            <h2>Будущие TDSD-настройки</h2>
             <span>Admin</span>
           </div>
           {!inactiveAssets.length ? (
-            <p className="empty">Неактивные активы пока не созданы.</p>
+            <p className="empty">Неактивные TDSD-настройки пока не созданы.</p>
           ) : (
             <div className="list">
               {inactiveAssets.map((asset) => (
@@ -1441,7 +1368,7 @@ function ProfileScreen({
         <Stat label="Ранг" value={user.rank} />
         <Stat label="Карма" value={user.karma} />
         <Stat label="Репутация" value={user.reputation ?? 0} />
-        <Stat label="Монеты" value={user.balance} />
+        <Stat label="TDSD" value={primaryBalance(userAssets(assetBalances))?.balance_display || "0"} />
       </section>
 
       <section className="section">
@@ -1913,9 +1840,9 @@ export default function App() {
       setCurrentDeposit(deposit);
       await Promise.all([loadTonData(), loadAssetData()]);
       setSuccess(
-        deposit.provider === "ton_native"
-          ? "Пополнение создано. Завершите перевод в кошельке."
-          : "Пополнение TDSD создано. Отправьте TDSD на указанный адрес с комментарием.",
+        deposit.provider === "tdsd_fixed_price"
+          ? `Покупка TDSD создана. Оплатите ${deposit.payment_amount_ton} TON через кошелек.`
+          : "Пополнение создано. Завершите перевод в кошельке.",
       );
     } catch (err) {
       setError(userDepositMessage(err.message));
@@ -1925,7 +1852,10 @@ export default function App() {
   }
 
   async function handlePayTonDeposit(deposit) {
-    if (deposit.provider && deposit.provider !== "ton_native") {
+    if (
+      deposit.provider &&
+      !["ton_native", "tdsd_fixed_price"].includes(deposit.provider)
+    ) {
       setError("Автоматическая оплата временно недоступна для TDSD");
       return;
     }

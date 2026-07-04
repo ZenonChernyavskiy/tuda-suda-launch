@@ -3,6 +3,7 @@ from app.config import (
     TDSD_ASSET_NAME,
     TDSD_ASSET_SYMBOL,
     TDSD_DECIMALS,
+    TDSD_DEPOSITS_ENABLED,
     TDSD_JETTON_MASTER_ADDRESS,
     TDSD_NETWORK,
 )
@@ -66,6 +67,7 @@ def run() -> None:
         is_active=True,
     )
     if SEED_TDSD_ASSET:
+        tdsd_provider_key = "jetton" if TDSD_DEPOSITS_ENABLED else "tdsd_fixed_price"
         upsert_asset(
             symbol=TDSD_ASSET_SYMBOL,
             name=TDSD_ASSET_NAME,
@@ -73,9 +75,9 @@ def run() -> None:
             network=TDSD_NETWORK,
             decimals=TDSD_DECIMALS,
             contract_address=TDSD_JETTON_MASTER_ADDRESS or None,
-            provider_key="jetton",
+            provider_key=tdsd_provider_key,
             display_order=10,
-            is_active=bool(TDSD_JETTON_MASTER_ADDRESS),
+            is_active=not TDSD_DEPOSITS_ENABLED or bool(TDSD_JETTON_MASTER_ADDRESS),
         )
     print("Production seed complete: assets are ready.")
 

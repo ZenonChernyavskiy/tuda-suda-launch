@@ -8,8 +8,8 @@
 
 - Ubuntu 22.04/24.04 или другой Linux server.
 - Docker и Docker Compose plugin.
-- Домен для frontend, например `app.example.com`.
-- Домен для backend, например `api.example.com`.
+- Домен для frontend, например `app.tudasuda.tech`.
+- Домен для backend, например `api.tudasuda.tech`.
 - HTTPS через reverse proxy: Caddy, Nginx Proxy Manager, Traefik или nginx + certbot.
 
 ## 2. Создать Telegram Bot и Mini App
@@ -21,7 +21,7 @@
 5. Укажите frontend HTTPS URL:
 
 ```text
-https://app.example.com
+https://app.tudasuda.tech
 ```
 
 6. Настройте menu button:
@@ -71,11 +71,12 @@ TONCENTER_API_KEY=<optional key>
 
 ```env
 BUY_COMMISSION_PERCENT=1
+TDSD_FIXED_PRICE_TON=0.1
 TRANSFER_COMMISSION_PERCENT=10
 TREASURY_WALLET_ADDRESS=UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6
 ```
 
-`BUY_COMMISSION_PERCENT=1` удерживает 1% из TDSD-покупки перед финальным зачислением на внутренний баланс. `TRANSFER_COMMISSION_PERCENT=10` удерживает 10% из суммы TDSD-дара: отправитель списывает полную сумму, получатель получает 90%, treasury получает 10%.
+`TDSD_FIXED_PRICE_TON=0.1` задает фиксированную цену `1 TDSD = 0.1 TON`. `BUY_COMMISSION_PERCENT=1` удерживает 1% из gross-суммы TDSD перед финальным зачислением на внутренний баланс. `TRANSFER_COMMISSION_PERCENT=10` удерживает 10% из суммы TDSD-дара: отправитель списывает полную сумму, получатель получает 90%, treasury получает 10%.
 
 Для TDSD после deploy Jetton:
 
@@ -90,6 +91,8 @@ TDSD_DEPOSITS_ENABLED=true
 ```env
 TDSD_DEPOSITS_ENABLED=false
 ```
+
+В этом режиме покупка TDSD работает через фиксированную цену: пользователь выбирает сумму TDSD, оплачивает рассчитанную сумму TON через кошелек, а backend проверяет оплату по адресу проекта, сумме и комментарию.
 
 ## 4. Настроить TON Connect Manifest
 
@@ -226,7 +229,7 @@ docker compose --env-file .env.production up --build -d backend
 REFERRALS_ENABLED=true
 REFERRAL_REWARD_PERCENT=10
 REFERRAL_REWARD_ASSET_SYMBOL=TDSD
-TELEGRAM_BOT_USERNAME=rudasuda_tdsd_bot
+TELEGRAM_BOT_USERNAME=tudasuda_tdsd_bot
 TELEGRAM_MINI_APP_SHORT_NAME=<mini app short name или пусто>
 FRONTEND_URL=https://app.tudasuda.tech
 ```

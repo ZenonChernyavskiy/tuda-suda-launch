@@ -198,7 +198,7 @@ alembic upgrade head
 python production_seed.py
 ```
 
-Если `TDSD_JETTON_MASTER_ADDRESS` пустой, seed создает TDSD как неактивный asset. Если адрес задан, TDSD становится активным и появляется во frontend в балансах, gifts и deposits.
+Если `TDSD_DEPOSITS_ENABLED=false`, seed оставляет TDSD активным для fixed-price покупки даже до готового Jetton-деплоя. Если `TDSD_DEPOSITS_ENABLED=true`, нужно указать `TDSD_JETTON_MASTER_ADDRESS` и `TDSD_PROJECT_JETTON_WALLET`, чтобы включить on-chain Jetton deposit.
 
 ## Service Fees
 
@@ -206,13 +206,14 @@ python production_seed.py
 
 ```env
 BUY_COMMISSION_PERCENT=1
+TDSD_FIXED_PRICE_TON=0.1
 TRANSFER_COMMISSION_PERCENT=10
 TREASURY_WALLET_ADDRESS=UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6
 HOT_WALLET_ADDRESS=UQB-gyjeCOixVUyVx-X_4FqhXeOwjCIUYnkue4vQESUx6f66
 TDSD_JETTON_MASTER_ADDRESS=EQBZkfdol6WOj-GXByKLeRlo70ktYIQnTA5Hq_gT6KVYvY3n
 ```
 
-Для TDSD-покупки комиссия платформы составляет `BUY_COMMISSION_PERCENT`. Если пользователь покупает 1000 TDSD, на его внутренний баланс в итоге попадет 990 TDSD, а 10 TDSD будут отражены как комиссия платформы и treasury income.
+Фиксированная цена задается через `TDSD_FIXED_PRICE_TON`: сейчас `1 TDSD = 0.1 TON`. Если пользователь оплачивает 10 TON, gross-покупка составляет 100 TDSD. Комиссия платформы `BUY_COMMISSION_PERCENT` удерживается из TDSD перед зачислением: при 1% на внутренний баланс попадет 99 TDSD.
 
 Для TDSD-подарка отправитель списывает полную сумму, получатель получает сумму за вычетом `TRANSFER_COMMISSION_PERCENT`, а treasury получает комиссию во внутреннем `AssetBalance`. Если отправитель дарит 100 TDSD, отправитель списывает 100 TDSD, получатель получает 90 TDSD, treasury получает 10 TDSD. Ledger фиксирует `gift_sent`, `gift_received`, `fee_transfer` и `treasury_income`.
 
@@ -222,7 +223,7 @@ Quote endpoints:
 - `POST /fees/purchase/quote`
 - `POST /fees/transfer/quote`
 
-TDSD deposit flow используется как покупка/пополнение внутреннего TDSD-баланса: после подтверждения deposit backend удерживает 1% комиссии и возвращает финальный баланс пользователя.
+TDSD top-up flow используется как покупка/пополнение внутреннего TDSD-баланса. Пока on-chain TDSD-deposit выключен, backend создает покупку TDSD за TON по фиксированной цене и проверяет оплату через сохраненный кошелек, сумму и комментарий. После подтверждения backend удерживает комиссию и возвращает финальный баланс пользователя.
 
 Важно: полноценный on-chain Jetton transfer из frontend через TON Connect с двумя Jetton transfer payload сообщениями пока не включен в браузерный код. Текущий gift flow остается внутренней off-chain операцией с ledger-аудитом, чтобы не возвращать `Buffer`/Node-only зависимости в Vite bundle.
 
@@ -374,7 +375,7 @@ Backend строит ссылку из env:
 REFERRALS_ENABLED=true
 REFERRAL_REWARD_PERCENT=10
 REFERRAL_REWARD_ASSET_SYMBOL=TDSD
-TELEGRAM_BOT_USERNAME=rudasuda_tdsd_bot
+TELEGRAM_BOT_USERNAME=tudasuda_tdsd_bot
 TELEGRAM_MINI_APP_SHORT_NAME=
 FRONTEND_URL=https://app.tudasuda.tech
 ```
@@ -382,13 +383,13 @@ FRONTEND_URL=https://app.tudasuda.tech
 Если `TELEGRAM_MINI_APP_SHORT_NAME` пустой, ссылка имеет вид:
 
 ```text
-https://t.me/rudasuda_tdsd_bot?start=ref_<REFERRAL_CODE>
+https://t.me/tudasuda_tdsd_bot?start=ref_<REFERRAL_CODE>
 ```
 
 Если short name задан:
 
 ```text
-https://t.me/rudasuda_tdsd_bot/<TELEGRAM_MINI_APP_SHORT_NAME>?startapp=ref_<REFERRAL_CODE>
+https://t.me/tudasuda_tdsd_bot/<TELEGRAM_MINI_APP_SHORT_NAME>?startapp=ref_<REFERRAL_CODE>
 ```
 
 В текущей backend-архитектуре награда начисляется после успешного подтверждения

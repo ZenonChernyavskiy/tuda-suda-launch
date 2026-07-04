@@ -134,6 +134,8 @@ class WalletResponse(BaseModel):
 class FeeConfigPublic(BaseModel):
     buy_commission_percent: str
     buy_fee_percent: str
+    tdsd_fixed_price_ton: str
+    tdsd_per_ton: str
     transfer_commission_percent: str
     purchase_fee_percent: str
     purchase_min_fee_ton: str
@@ -258,6 +260,9 @@ class AssetDepositCreateResponse(BaseModel):
     asset_name: str
     amount_units: int
     amount_display: str
+    payment_amount_nano: int | None = None
+    payment_amount_ton: str | None = None
+    fixed_price_ton: str | None = None
     target_wallet_address: str
     comment: str
     provider: str
@@ -274,6 +279,9 @@ class AssetDepositPublic(BaseModel):
     target_wallet_address: str
     amount_units: int
     amount_display: str
+    payment_amount_nano: int | None = None
+    payment_amount_ton: str | None = None
+    fixed_price_ton: str | None = None
     tx_hash: str | None
     comment: str | None
     status: Literal["pending", "confirmed", "failed"]

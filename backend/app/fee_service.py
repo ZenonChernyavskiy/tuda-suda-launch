@@ -4,6 +4,7 @@ from decimal import Decimal, ROUND_DOWN
 from .config import (
     BUY_COMMISSION_PERCENT,
     TDSD_ASSET_SYMBOL,
+    TDSD_FIXED_PRICE_TON,
     TRANSFER_COMMISSION_PERCENT,
 )
 
@@ -28,6 +29,13 @@ class BuyCommissionQuote:
     treasury_amount_units: int
     credited_amount_units: int
     commission_percent: Decimal
+
+
+@dataclass(frozen=True)
+class TdsdFixedPriceQuote:
+    gross_amount_units: int
+    payment_amount_nano: int
+    fixed_price_ton: Decimal
 
 
 @dataclass(frozen=True)
@@ -94,6 +102,30 @@ def calculate_buy_commission(amount_units: int) -> BuyCommissionQuote:
         treasury_amount_units=commission_amount_units,
         credited_amount_units=credited_amount_units,
         commission_percent=BUY_COMMISSION_PERCENT,
+    )
+
+
+def calculate_tdsd_fixed_price_quote(
+    amount_units: int,
+    decimals: int,
+) -> TdsdFixedPriceQuote:
+    gross_amount_units = int(amount_units)
+    if gross_amount_units <= 0:
+        raise ValueError("Сумма покупки TDSD должна быть больше нуля")
+    if decimals < 0:
+        raise ValueError("Некорректная точность TDSD")
+
+    scale = Decimal(10) ** int(decimals)
+    amount_tdsd = Decimal(gross_amount_units) / scale
+    payment_ton = amount_tdsd * TDSD_FIXED_PRICE_TON
+    payment_amount_nano = decimal_to_nano(payment_ton)
+    if payment_amount_nano <= 0:
+        raise ValueError("Сумма покупки TDSD слишком мала")
+
+    return TdsdFixedPriceQuote(
+        gross_amount_units=gross_amount_units,
+        payment_amount_nano=payment_amount_nano,
+        fixed_price_ton=TDSD_FIXED_PRICE_TON,
     )
 
 

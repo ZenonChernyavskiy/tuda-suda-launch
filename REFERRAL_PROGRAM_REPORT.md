@@ -64,13 +64,13 @@
 Если `TELEGRAM_MINI_APP_SHORT_NAME` пустой:
 
 ```text
-https://t.me/rudasuda_tdsd_bot?start=ref_<REFERRAL_CODE>
+https://t.me/tudasuda_tdsd_bot?start=ref_<REFERRAL_CODE>
 ```
 
 Если `TELEGRAM_MINI_APP_SHORT_NAME` задан:
 
 ```text
-https://t.me/rudasuda_tdsd_bot/<TELEGRAM_MINI_APP_SHORT_NAME>?startapp=ref_<REFERRAL_CODE>
+https://t.me/tudasuda_tdsd_bot/<TELEGRAM_MINI_APP_SHORT_NAME>?startapp=ref_<REFERRAL_CODE>
 ```
 
 В mock mode frontend также читает `startapp`, `start` или `ref` из URL.

@@ -8,6 +8,7 @@ from .config import (
     TDSD_ASSET_NAME,
     TDSD_ASSET_SYMBOL,
     TDSD_DECIMALS,
+    TDSD_DEPOSITS_ENABLED,
     TDSD_JETTON_MASTER_ADDRESS,
     TDSD_NETWORK,
 )
@@ -346,14 +347,16 @@ def ensure_asset_economy() -> None:
             )
         )
         if SEED_TDSD_ASSET:
+            tdsd_provider_key = "jetton" if TDSD_DEPOSITS_ENABLED else "tdsd_fixed_price"
+            tdsd_fixed_price_mode = not TDSD_DEPOSITS_ENABLED
             connection.execute(
                 text(
                     "INSERT INTO assets "
                     "(symbol, name, asset_type, network, decimals, contract_address, "
                     "provider_key, metadata_json, display_order, is_active, created_at) "
                     "SELECT :symbol, :name, 'jetton', :network, :decimals, :contract_address, "
-                    "'jetton', '{\"stage\":\"production-ready\",\"token\":\"TDSD\"}', 10, "
-                    "CASE WHEN :contract_address = '' THEN 0 ELSE 1 END, CURRENT_TIMESTAMP "
+                    ":provider_key, '{\"stage\":\"production-ready\",\"token\":\"TDSD\"}', 10, "
+                    "CASE WHEN :fixed_price_mode = 1 OR :contract_address != '' THEN 1 ELSE 0 END, CURRENT_TIMESTAMP "
                     "WHERE NOT EXISTS (SELECT 1 FROM assets WHERE symbol = :symbol)"
                 ),
                 {
@@ -362,18 +365,21 @@ def ensure_asset_economy() -> None:
                     "network": TDSD_NETWORK,
                     "decimals": TDSD_DECIMALS,
                     "contract_address": TDSD_JETTON_MASTER_ADDRESS,
+                    "provider_key": tdsd_provider_key,
+                    "fixed_price_mode": int(tdsd_fixed_price_mode),
                 },
             )
             connection.execute(
                 text(
                     "UPDATE assets "
-                    "SET provider_key = COALESCE(provider_key, 'jetton'), "
+                    "SET provider_key = :provider_key, "
                     "display_order = COALESCE(display_order, 10), "
                     "contract_address = CASE "
                     "  WHEN :contract_address = '' THEN contract_address "
                     "  ELSE :contract_address "
                     "END, "
                     "is_active = CASE "
+                    "  WHEN :fixed_price_mode = 1 THEN 1 "
                     "  WHEN :contract_address = '' THEN is_active "
                     "  ELSE 1 "
                     "END "
@@ -382,6 +388,8 @@ def ensure_asset_economy() -> None:
                 {
                     "symbol": TDSD_ASSET_SYMBOL,
                     "contract_address": TDSD_JETTON_MASTER_ADDRESS,
+                    "provider_key": tdsd_provider_key,
+                    "fixed_price_mode": int(tdsd_fixed_price_mode),
                 },
             )
         ton_asset = connection.execute(

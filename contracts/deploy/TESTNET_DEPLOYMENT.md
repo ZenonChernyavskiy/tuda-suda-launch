@@ -23,7 +23,7 @@ Edit `.env.contracts`:
 
 ```env
 TON_NETWORK=testnet
-TDSD_METADATA_URL=https://app.example.com/tdsd-metadata.json
+TDSD_METADATA_URL=https://app.tudasuda.tech/tdsd-metadata.json
 TDSD_OWNER_ADDRESS=<admin wallet address>
 TDSD_PROJECT_WALLET_ADDRESS=<project TON wallet owner>
 ```

@@ -39,9 +39,10 @@
 ## TDSD deposits
 
 - Английское техническое сообщение про contract deployment убрано из пользовательского пути.
-- Если TDSD-пополнения выключены или не хватает TDSD config, backend возвращает: `Пополнение TDSD временно недоступно`.
+- Если on-chain TDSD-пополнение выключено через `TDSD_DEPOSITS_ENABLED=false`, backend использует fixed-price покупку TDSD за TON.
+- Если не хватает кошелька проекта для fixed-price покупки, backend возвращает: `Пополнение TDSD временно недоступно`.
 - Ошибки проверки TDSD-пополнения переведены на нормальные русские сообщения.
-- По текущему `.env.example` `TDSD_DEPOSITS_ENABLED=false`, поэтому на сервере пополнение TDSD останется недоступным до включения и настройки адресов.
+- По текущему `.env.example` `TDSD_DEPOSITS_ENABLED=false`, поэтому на сервере используется покупка TDSD по фиксированной цене.
 
 ## Env на сервере
 
@@ -51,9 +52,11 @@
 - `TELEGRAM_MINI_APP_SHORT_NAME` — short name Mini App; если он пустой, ссылки будут через `?start=ref_...`.
 - `PUBLIC_APP_URL` — публичный HTTPS URL frontend.
 - `PUBLIC_API_URL` — публичный HTTPS URL backend.
-- `TDSD_DEPOSITS_ENABLED` — `true` только когда TDSD-пополнения реально готовы.
+- `TDSD_DEPOSITS_ENABLED` — `false` для fixed-price покупки TDSD за TON, `true` только когда on-chain Jetton deposit реально готов.
 - `TDSD_JETTON_MASTER_ADDRESS` — deployed TDSD master address.
 - `TDSD_PROJECT_JETTON_WALLET` — project TDSD wallet address; обязателен при `TDSD_DEPOSITS_ENABLED=true`.
+- `PROJECT_TON_WALLET` — project wallet для fixed-price покупки при `TDSD_DEPOSITS_ENABLED=false`.
+- `TDSD_FIXED_PRICE_TON` — фиксированная цена, сейчас `0.1`.
 - `TON_NETWORK` — техническая сеть для провайдера, сейчас используется backend-интеграцией.
 
 ## Проверки
@@ -76,6 +79,6 @@
 5. Проверить в backend или UI рефералов, что B появился у A как приглашенный.
 6. Открыть `Профиль -> Пополнить актив` и проверить текст `Кошелек подключен`.
 7. Выбрать TDSD и проверить, что нет английского сообщения про deployment.
-8. Если `TDSD_DEPOSITS_ENABLED=false`, должно быть видно `Пополнение TDSD временно недоступно`.
-9. Если `TDSD_DEPOSITS_ENABLED=true`, проверить создание TDSD-пополнения, memo/комментарий и подтверждение.
+8. Если `TDSD_DEPOSITS_ENABLED=false`, проверить fixed-price покупку: `1 TDSD = 0.1 TON`, создание заявки, оплату через кошелек и подтверждение.
+9. Если `TDSD_DEPOSITS_ENABLED=true`, проверить on-chain Jetton deposit, memo/комментарий и подтверждение.
 10. На сервере выполнить `docker compose up --build`, затем проверить `/health`.
