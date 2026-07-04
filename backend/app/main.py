@@ -268,6 +268,7 @@ def serialize_user(
         telegram_id=user.telegram_id,
         username=user.username,
         first_name=user.first_name,
+        photo_url=user.photo_url,
         balance=user.balance,
         karma=user.karma,
         reputation=int(user.reputation or 0),
@@ -933,6 +934,7 @@ def get_or_create_user(
     telegram_id: str,
     username: str | None,
     first_name: str | None,
+    photo_url: str | None = None,
     referral_param: str | None = None,
 ) -> models.User:
     # Telegram Mini App открывается без отдельной регистрации: создаем профиль при первом входе.
@@ -940,6 +942,7 @@ def get_or_create_user(
     if user:
         user.username = username
         user.first_name = first_name
+        user.photo_url = photo_url
         user.last_active_at = datetime.utcnow()
         ensure_referral_code(db, user)
         apply_referral_on_first_login(db, user, referral_param)
@@ -953,6 +956,7 @@ def get_or_create_user(
         telegram_id=telegram_id,
         username=username,
         first_name=first_name,
+        photo_url=photo_url,
         balance=INITIAL_BALANCE,
         karma=0,
         total_sent=0,
@@ -1088,6 +1092,7 @@ def auth_telegram(
         telegram_id=str(telegram_user["telegram_id"]),
         username=telegram_user.get("username"),
         first_name=telegram_user.get("first_name"),
+        photo_url=telegram_user.get("photo_url"),
         referral_param=referral_param,
     )
     return schemas.AuthResponse(
@@ -1210,6 +1215,7 @@ def fees_config() -> schemas.FeeConfigPublic:
         purchase_min_fee_ton="0",
         transfer_fee_percent=decimal_label(TRANSFER_COMMISSION_PERCENT),
         transfer_fee_asset_symbol=TDSD_ASSET_SYMBOL,
+        project_ton_wallet_address=PROJECT_TON_WALLET,
         treasury_wallet_address=TREASURY_WALLET_ADDRESS,
         hot_wallet_address=HOT_WALLET_ADDRESS,
         tdsd_jetton_master_address=TDSD_JETTON_MASTER_ADDRESS,

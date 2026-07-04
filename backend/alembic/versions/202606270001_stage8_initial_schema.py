@@ -22,6 +22,7 @@ def upgrade() -> None:
         sa.Column("telegram_id", sa.String(length=64), nullable=False),
         sa.Column("username", sa.String(length=64), nullable=True),
         sa.Column("first_name", sa.String(length=128), nullable=True),
+        sa.Column("photo_url", sa.String(length=512), nullable=True),
         sa.Column("balance", sa.Integer(), nullable=False, server_default="100"),
         sa.Column("karma", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("reputation", sa.Integer(), nullable=False, server_default="0"),

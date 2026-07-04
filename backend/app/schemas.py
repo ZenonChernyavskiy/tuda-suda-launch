@@ -9,6 +9,7 @@ class MockTelegramUser(BaseModel):
     telegram_id: str
     username: str | None = None
     first_name: str | None = None
+    photo_url: str | None = None
 
 
 class TelegramAuthRequest(BaseModel):
@@ -26,6 +27,7 @@ class UserPublic(BaseModel):
     telegram_id: str
     username: str | None
     first_name: str | None
+    photo_url: str | None = None
     balance: int
     karma: int
     reputation: int
@@ -141,6 +143,7 @@ class FeeConfigPublic(BaseModel):
     purchase_min_fee_ton: str
     transfer_fee_percent: str
     transfer_fee_asset_symbol: str
+    project_ton_wallet_address: str
     treasury_wallet_address: str
     hot_wallet_address: str
     tdsd_jetton_master_address: str

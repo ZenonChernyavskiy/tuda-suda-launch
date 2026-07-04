@@ -54,6 +54,11 @@ export function getTelegramStartParam() {
   );
 }
 
+export function getTelegramUserPhotoUrl() {
+  const webApp = getTelegramWebApp();
+  return webApp?.initDataUnsafe?.user?.photo_url || "";
+}
+
 export function isTelegramMode() {
   return Boolean(getTelegramInitData());
 }

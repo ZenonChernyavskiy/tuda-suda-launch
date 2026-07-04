@@ -598,6 +598,11 @@ button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.purchase-mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
 .leader-row > span {
   display: grid;
   place-items: center;
@@ -753,6 +758,7 @@ button {
   place-items: center;
   width: 72px;
   height: 72px;
+  overflow: hidden;
   border: 1px solid rgba(255, 209, 102, 0.26);
   border-radius: 50%;
   background: rgba(255, 209, 102, 0.12);
@@ -760,6 +766,12 @@ button {
   font-size: 30px;
   font-weight: 900;
   box-shadow: 0 0 38px rgba(255, 209, 102, 0.14);
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .mock-users {

@@ -71,6 +71,10 @@ def ensure_user_wallet_columns() -> None:
             statements.append(
                 "ALTER TABLE users ADD COLUMN ton_wallet_connected_at DATETIME"
             )
+        if "photo_url" not in columns:
+            statements.append(
+                "ALTER TABLE users ADD COLUMN photo_url VARCHAR(512)"
+            )
         if "last_active_at" not in columns:
             statements.append(
                 "ALTER TABLE users ADD COLUMN last_active_at DATETIME"

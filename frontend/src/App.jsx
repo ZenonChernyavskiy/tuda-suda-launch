@@ -7,6 +7,7 @@ import {
   getMockUser,
   getTelegramInitData,
   getTelegramStartParam,
+  getTelegramUserPhotoUrl,
   getTelegramWebApp,
   initTelegramWebApp,
   isTelegramMode,
@@ -47,6 +48,7 @@ const DEFAULT_FEE_CONFIG = {
   tdsd_per_ton: "10",
   transfer_fee_percent: "10",
   transfer_fee_asset_symbol: "TDSD",
+  project_ton_wallet_address: "",
   treasury_wallet_address: "",
   hot_wallet_address: "",
   tdsd_jetton_master_address: "",
@@ -184,6 +186,19 @@ function calculateFixedPricePaymentDisplay(amountDisplay, asset, fixedPriceTon) 
     const priceNano = BigInt(displayAmountToUnits(fixedPriceTon, 9));
     const scale = 10n ** BigInt(asset.decimals);
     return unitsToDisplay((tdsdUnits * priceNano) / scale, 9);
+  } catch {
+    return "";
+  }
+}
+
+function calculateFixedPriceTdsdDisplay(paymentTonDisplay, asset, fixedPriceTon) {
+  if (!asset || !fixedPriceTon) return "";
+  try {
+    const paymentNano = BigInt(displayAmountToUnits(paymentTonDisplay || "0", 9));
+    const priceNano = BigInt(displayAmountToUnits(fixedPriceTon, 9));
+    if (priceNano <= 0n) return "";
+    const scale = 10n ** BigInt(asset.decimals);
+    return unitsToDisplay((paymentNano * scale) / priceNano, asset.decimals);
   } catch {
     return "";
   }
@@ -383,6 +398,12 @@ function ledgerOperation(entry) {
   };
 }
 
+function isFeeLedgerEntry(entry) {
+  return ["fee", "fee_purchase", "fee_transfer", "treasury_income"].includes(
+    entry?.entry_type,
+  );
+}
+
 function globalLedgerOperation(entry) {
   return {
     key: `global-${entry.id}`,
@@ -513,7 +534,6 @@ function HomeScreen({
   const [giftOpen, setGiftOpen] = useState(false);
   const user = dashboard.user;
   const visibleAssetBalances = userAssets(assetBalances);
-  const mainBalance = primaryBalance(visibleAssetBalances);
   return (
     <main className="screen">
       <section className="hero">
@@ -526,14 +546,6 @@ function HomeScreen({
               ? `Кошелек: ${shortenAddress(tonAddress)}`
               : "Кошелек не подключен"}
           </span>
-        </div>
-        <div className="hero-balance">
-          <span>Основной баланс</span>
-          <strong>
-            {mainBalance
-              ? `${mainBalance.balance_display} ${mainBalance.symbol}`
-              : `${user.balance} ${USER_ASSET_SYMBOL}`}
-          </strong>
         </div>
       </section>
 
@@ -563,9 +575,9 @@ function HomeScreen({
 
       <section className="section">
         <div className="section-title">
-          <h2>Балансы</h2>
+          <h2>TDSD</h2>
         </div>
-          <AssetBalanceList
+        <AssetBalanceList
           balances={visibleAssetBalances}
           emptyText="TDSD появится после синхронизации."
         />
@@ -775,10 +787,11 @@ function TonTopUpScreen({
   verifying,
   onCreateDeposit,
   onPayDeposit,
+  onCopyPaymentAddress,
   onVerifyDeposit,
 }) {
-  const [selectedAmount, setSelectedAmount] = useState("1");
-  const [customAmount, setCustomAmount] = useState("");
+  const [purchaseMode, setPurchaseMode] = useState("tdsd");
+  const [customAmount, setCustomAmount] = useState("10");
   const [selectedAssetSymbol, setSelectedAssetSymbol] = useState(USER_ASSET_SYMBOL);
   const depositAssets = userAssets(assets);
   const selectedAsset =
@@ -793,17 +806,23 @@ function TonTopUpScreen({
   const hasSavedWallet = Boolean(savedAddress);
   const isDifferentWallet =
     hasConnectedWallet && hasSavedWallet && connectedAddress !== savedAddress;
-  const amount = customAmount.trim() || selectedAmount;
+  const amount = customAmount.trim();
   const buyCommissionPercent =
     feeConfig?.buy_commission_percent || feeConfig?.purchase_fee_percent || "1";
   const fixedPriceTon = feeConfig?.tdsd_fixed_price_ton || "0.1";
-  const buyCommissionApplies = selectedAsset?.symbol === "TDSD";
+  const buyCommissionApplies = selectedAsset?.symbol === USER_ASSET_SYMBOL;
+  const tdsdAmountDisplay = buyCommissionApplies && purchaseMode === "ton"
+    ? calculateFixedPriceTdsdDisplay(amount, selectedAsset, fixedPriceTon)
+    : amount;
   const buyCreditedDisplay = buyCommissionApplies
-    ? calculateRecipientDisplay(amount, selectedAsset, buyCommissionPercent)
+    ? calculateRecipientDisplay(tdsdAmountDisplay, selectedAsset, buyCommissionPercent)
     : "";
   const paymentDisplay = buyCommissionApplies
-    ? calculateFixedPricePaymentDisplay(amount, selectedAsset, fixedPriceTon)
+    ? purchaseMode === "ton"
+      ? amount
+      : calculateFixedPricePaymentDisplay(tdsdAmountDisplay, selectedAsset, fixedPriceTon)
     : "";
+  const paymentAddress = currentDeposit?.target_wallet_address || "";
   const balanceText = selectedBalance
     ? `${selectedBalance.balance_display} ${selectedBalance.symbol}`
     : selectedAsset?.symbol || USER_ASSET_SYMBOL;
@@ -811,14 +830,14 @@ function TonTopUpScreen({
   async function handleCreate(event) {
     event.preventDefault();
     if (!selectedAsset) return;
-    await onCreateDeposit(selectedAsset, amount);
+    await onCreateDeposit(selectedAsset, tdsdAmountDisplay);
   }
 
   return (
     <>
       <section className="section ton-section">
         <div className="section-title">
-          <h2>Пополнить актив</h2>
+          <h2>Купить TDSD</h2>
           <span>{balanceText}</span>
         </div>
 
@@ -862,7 +881,6 @@ function TonTopUpScreen({
                 key={asset.symbol}
                 onClick={() => {
                   setSelectedAssetSymbol(asset.symbol);
-                  setCustomAmount("");
                 }}
                 type="button"
               >
@@ -873,13 +891,29 @@ function TonTopUpScreen({
           {!selectedAsset ? (
             <p className="empty">Пополнение TDSD временно недоступно</p>
           ) : null}
+          <div className="segments purchase-mode">
+            <button
+              className={purchaseMode === "tdsd" ? "active" : ""}
+              onClick={() => setPurchaseMode("tdsd")}
+              type="button"
+            >
+              В TDSD
+            </button>
+            <button
+              className={purchaseMode === "ton" ? "active" : ""}
+              onClick={() => setPurchaseMode("ton")}
+              type="button"
+            >
+              В TON
+            </button>
+          </div>
           <label className="field">
-            <span>Сумма TDSD</span>
+            <span>Сумма {purchaseMode === "tdsd" ? "TDSD" : "TON"}</span>
             <input
               inputMode="decimal"
               min="0"
               onChange={(event) => setCustomAmount(event.target.value)}
-              placeholder="Например 10"
+              placeholder={purchaseMode === "tdsd" ? "Например 100" : "Например 10"}
               type="text"
               value={customAmount}
             />
@@ -888,7 +922,7 @@ function TonTopUpScreen({
             <div className="fee-note">
               <p>Курс: 1 TDSD = {fixedPriceTon} TON</p>
               <p>
-                Покупка: {amount || "0"} {selectedAsset.symbol}
+                Покупка: {tdsdAmountDisplay || "0"} {selectedAsset.symbol}
               </p>
               <p>К оплате: {paymentDisplay || "0"} TON</p>
               <p>
@@ -923,10 +957,29 @@ function TonTopUpScreen({
                 <b>{currentDeposit.payment_amount_ton} TON</b>
               </div>
             ) : null}
+            {paymentAddress ? (
+              <>
+                <div className="wallet-address">
+                  <span>Адрес для оплаты</span>
+                  <b>{paymentAddress}</b>
+                </div>
+                <button
+                  className="secondary"
+                  onClick={() => onCopyPaymentAddress(paymentAddress)}
+                  type="button"
+                >
+                  Скопировать адрес
+                </button>
+              </>
+            ) : null}
             <div className="wallet-address">
               <span>Комментарий</span>
               <b>{currentDeposit.comment}</b>
             </div>
+            <p className="wallet-note">
+              Оплатите указанную сумму TON и дождитесь подтверждения. Комментарий нужен
+              для автоматического зачисления TDSD.
+            </p>
             {["ton_native", "tdsd_fixed_price"].includes(currentDeposit.provider) ? (
               <button
                 className="primary"
@@ -1309,6 +1362,7 @@ function ReferralsScreen({
 function ProfileScreen({
   user,
   telegramMode,
+  telegramPhotoUrl,
   onSwitchMockUser,
   authLoading,
   connectedAddress,
@@ -1322,6 +1376,7 @@ function ProfileScreen({
   assetBalances,
   depositProps,
 }) {
+  const avatarPhotoUrl = user.photo_url || telegramPhotoUrl;
   const savedAddress = savedWallet?.wallet_address || user.ton_wallet_address || "";
   const savedAt = savedWallet?.connected_at || user.ton_wallet_connected_at;
   const hasConnectedWallet = Boolean(connectedAddress);
@@ -1351,7 +1406,11 @@ function ProfileScreen({
     <main className="screen">
       <section className="profile">
         <span className="avatar">
-          {(user.first_name || user.username || "T").slice(0, 1)}
+          {avatarPhotoUrl ? (
+            <img alt={displayName(user)} src={avatarPhotoUrl} />
+          ) : (
+            (user.first_name || user.username || "T").slice(0, 1)
+          )}
         </span>
         <h2>{displayName(user)}</h2>
         <p>
@@ -1543,13 +1602,13 @@ export default function App() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const telegramMode = useMemo(() => isTelegramMode(), [dashboard]);
+  const telegramPhotoUrl = useMemo(() => getTelegramUserPhotoUrl(), [dashboard]);
   const connectedTonAddress = tonWallet?.account?.address || "";
   const homeTonAddress =
     dashboard?.user.ton_wallet_address ||
     savedWallet?.wallet_address ||
     connectedTonAddress;
   const recentOperations = newestFirst([
-    ...transactions.map(transactionOperation),
     ...assetGifts.map(assetGiftOperation),
   ]).slice(0, 5);
   const sendProps = {
@@ -1570,6 +1629,7 @@ export default function App() {
     deposits: tonDeposits,
     feeConfig,
     onCreateDeposit: handleCreateTonDeposit,
+    onCopyPaymentAddress: handleCopyPaymentAddress,
     onPayDeposit: handlePayTonDeposit,
     onVerifyDeposit: handleVerifyTonDeposit,
     paying,
@@ -1592,7 +1652,14 @@ export default function App() {
     setPublicTransactionsLoading(true);
     try {
       const data = await api.getPublicTransactions();
-      setPublicTransactions(data.filter((item) => item.token !== "TON"));
+      setPublicTransactions(
+        data.filter(
+          (item) =>
+            item.token !== "TON" &&
+            item.source_type !== "fee" &&
+            item.source_type !== "virtual_gift",
+        ),
+      );
     } finally {
       setPublicTransactionsLoading(false);
     }
@@ -1659,7 +1726,11 @@ export default function App() {
     setAssets(assetRows);
     setAdminAssets(adminAssetRows);
     setAssetBalances(balanceRows);
-    setAssetLedger(ledgerRows.filter((entry) => entry.symbol === USER_ASSET_SYMBOL));
+    setAssetLedger(
+      ledgerRows.filter(
+        (entry) => entry.symbol === USER_ASSET_SYMBOL && !isFeeLedgerEntry(entry),
+      ),
+    );
     setAssetGifts(giftRows.filter((gift) => gift.symbol === USER_ASSET_SYMBOL));
     setAssetGiftFeed(giftFeedRows.filter((gift) => gift.symbol === USER_ASSET_SYMBOL));
     setAssetGiftLeaderboard(giftLeaderboardRows);
@@ -1841,7 +1912,7 @@ export default function App() {
       await Promise.all([loadTonData(), loadAssetData()]);
       setSuccess(
         deposit.provider === "tdsd_fixed_price"
-          ? `Покупка TDSD создана. Оплатите ${deposit.payment_amount_ton} TON через кошелек.`
+          ? `Покупка TDSD создана. Оплатите ${deposit.payment_amount_ton} TON через кошелек или по адресу ниже.`
           : "Пополнение создано. Завершите перевод в кошельке.",
       );
     } catch (err) {
@@ -1883,6 +1954,12 @@ export default function App() {
     } finally {
       setPaying(false);
     }
+  }
+
+  async function handleCopyPaymentAddress(address) {
+    if (!address) return;
+    await copyTextToClipboard(address);
+    setSuccess("Адрес для оплаты скопирован");
   }
 
   async function handleVerifyTonDeposit(depositId) {
@@ -2055,6 +2132,7 @@ export default function App() {
           onSaveWallet={handleSaveWallet}
           savedWallet={savedWallet}
           mockAllowed={ENABLE_MOCK_AUTH}
+          telegramPhotoUrl={telegramPhotoUrl}
           telegramMode={telegramMode}
           user={dashboard.user}
           walletLoading={walletLoading}

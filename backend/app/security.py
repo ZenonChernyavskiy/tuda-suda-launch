@@ -148,5 +148,6 @@ def parse_telegram_init_data(init_data: str, bot_token: str) -> dict:
         "telegram_id": str(user["id"]),
         "username": user.get("username"),
         "first_name": user.get("first_name"),
+        "photo_url": user.get("photo_url"),
         "start_param": parsed_data.get("start_param") or parsed_data.get("startapp"),
     }

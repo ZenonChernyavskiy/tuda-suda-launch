@@ -27,6 +27,7 @@ class User(Base):
     telegram_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     balance: Mapped[int] = mapped_column(Integer, default=100)
     karma: Mapped[int] = mapped_column(Integer, default=0)
     reputation: Mapped[int] = mapped_column(Integer, default=0, index=True)
