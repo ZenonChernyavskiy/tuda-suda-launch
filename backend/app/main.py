@@ -791,7 +791,7 @@ def serialize_public_virtual_transaction(
         created_at=transaction.created_at,
         sender=user_display_name(transaction.sender),
         receiver=user_display_name(transaction.receiver),
-        token="монеты",
+        token=TDSD_ASSET_SYMBOL,
         amount=str(transaction.amount),
         direction="Перевод",
         comment=transaction.message,

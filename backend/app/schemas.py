@@ -60,7 +60,7 @@ class GiftSendRequest(BaseModel):
     @classmethod
     def amount_must_be_allowed(cls, value: int) -> int:
         if value not in {1, 5, 10, 25}:
-            raise ValueError("Можно отправить только 1, 5, 10 или 25 монет")
+            raise ValueError("Можно отправить только 1, 5, 10 или 25 TDSD")
         return value
 
     @field_validator("message")

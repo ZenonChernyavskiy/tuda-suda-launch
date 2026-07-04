@@ -252,15 +252,6 @@ function depositPaymentAmountUnits(deposit) {
   return tonToNanoString(deposit?.amount_ton || "0");
 }
 
-function assetTypeLabel(type) {
-  const labels = {
-    native: "Актив",
-    jetton: "TDSD",
-    internal: "Внутренний",
-  };
-  return labels[type] || type;
-}
-
 function ledgerTypeLabel(type) {
   const labels = {
     deposit: "Пополнение",
@@ -1041,18 +1032,16 @@ function TonTopUpScreen({
 
 function AssetsScreen({
   assets,
-  allAssets,
   balances,
   ledger,
   giftLeaderboard,
-  adminEnabled,
 }) {
   const visibleAssets = userAssets(assets);
   const visibleBalances = userAssets(balances);
   const senders = giftLeaderboard?.senders || [];
   const receivers = giftLeaderboard?.receivers || [];
-  const inactiveAssets = userAssets(allAssets.length ? allAssets : assets).filter(
-    (asset) => !asset.is_active,
+  const balanceByAsset = new Map(
+    visibleBalances.map((balance) => [balance.symbol, balance]),
   );
   return (
     <main className="screen">
@@ -1069,49 +1058,16 @@ function AssetsScreen({
                 <div>
                   <strong>{asset.symbol}</strong>
                   <span>{asset.name}</span>
-                  <p>{assetTypeLabel(asset.asset_type)} · точность {asset.decimals}</p>
-                  {asset.contract_address ? (
-                    <p>{shortenAddress(asset.contract_address)}</p>
-                  ) : null}
+                  <p>Внутренний баланс для подарков и покупок.</p>
                 </div>
-                <b>{asset.is_active ? "active" : "off"}</b>
+                <b>
+                  {balanceByAsset.get(asset.symbol)?.balance_display || "0"} {asset.symbol}
+                </b>
               </article>
             ))}
           </div>
         )}
       </section>
-
-      {adminEnabled ? (
-        <section className="section dev-section">
-          <div className="section-title">
-            <h2>Будущие TDSD-настройки</h2>
-            <span>Admin</span>
-          </div>
-          {!inactiveAssets.length ? (
-            <p className="empty">Неактивные TDSD-настройки пока не созданы.</p>
-          ) : (
-            <div className="list">
-              {inactiveAssets.map((asset) => (
-                <article className="asset-row inactive" key={asset.symbol}>
-                  <div>
-                    <strong>{asset.symbol}</strong>
-                    <span>{asset.name}</span>
-                    <p>
-                      {assetTypeLabel(asset.asset_type)} · настройки ожидают публикации
-                    </p>
-                    {asset.contract_address ? (
-                      <p>{shortenAddress(asset.contract_address)}</p>
-                    ) : (
-                      <p>Адрес актива будет задан после публикации.</p>
-                    )}
-                  </div>
-                  <b>off</b>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      ) : null}
 
       <section className="section">
         <div className="section-title">
@@ -1122,7 +1078,7 @@ function AssetsScreen({
 
       <section className="section">
         <div className="section-title">
-          <h2>История активов</h2>
+          <h2>История TDSD</h2>
         </div>
         {!ledger.length ? (
           <p className="empty">История появится после первой операции с TDSD.</p>

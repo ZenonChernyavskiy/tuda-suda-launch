@@ -1,0 +1,18 @@
+.DS_Store
+.env
+.env.production
+*.db
+*.sqlite
+*.sqlite3
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+dist/
+frontend/dist/
+backend/tuda_suda.db
+backend/*.db
+frontend/package-lock 3.json
+frontend/src/styles 2.css
+README 2.md
+contracts/README 2.md

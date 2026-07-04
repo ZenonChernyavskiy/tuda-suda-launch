@@ -70,13 +70,14 @@ TONCENTER_API_KEY=<optional key>
 Комиссии сервиса:
 
 ```env
+PURCHASE_FEE_PERCENT=1
 BUY_COMMISSION_PERCENT=1
 TDSD_FIXED_PRICE_TON=0.1
 TRANSFER_COMMISSION_PERCENT=10
 TREASURY_WALLET_ADDRESS=UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6
 ```
 
-`TDSD_FIXED_PRICE_TON=0.1` задает фиксированную цену `1 TDSD = 0.1 TON`. `BUY_COMMISSION_PERCENT=1` удерживает 1% из gross-суммы TDSD перед финальным зачислением на внутренний баланс. `TRANSFER_COMMISSION_PERCENT=10` удерживает 10% из суммы TDSD-дара: отправитель списывает полную сумму, получатель получает 90%, treasury получает 10%.
+`TDSD_FIXED_PRICE_TON=0.1` задает фиксированную цену `1 TDSD = 0.1 TON`. `PURCHASE_FEE_PERCENT=1` удерживает 1% из gross-суммы TDSD перед финальным зачислением на внутренний баланс. `BUY_COMMISSION_PERCENT` оставлен как совместимый alias. `TRANSFER_COMMISSION_PERCENT=10` удерживает 10% из суммы TDSD-дара: отправитель списывает полную сумму, получатель получает 90%, treasury получает 10%.
 
 Для TDSD после deploy Jetton:
 
@@ -116,9 +117,16 @@ frontend/public/tonconnect-manifest.json
 
 ## 5. Запустить Docker Compose
 
+Безопасная схема деплоя с сохранением работающих контейнеров на случай ошибки build:
+
 ```bash
-docker compose --env-file .env.production up --build -d
+git fetch origin
+git reset --hard origin/main
+docker compose --env-file .env.production build
+docker compose --env-file .env.production up -d
 ```
+
+Не запускайте `docker compose down` перед build: если сборка упадет, старые контейнеры продолжат обслуживать сайт.
 
 Проверить:
 
@@ -157,12 +165,13 @@ https://app.tudasuda.tech/tonconnect-manifest.json
 2. Нажмите menu button.
 3. Приложение должно открыться без mock mode.
 4. Backend должен принять `initData`.
-5. На профиле подключите TON Connect wallet.
-6. Сохраните wallet в backend.
-7. Создайте TON testnet deposit.
-8. Отправьте testnet TON с memo.
-9. Нажмите “Проверить статус”.
-10. Проверьте `AssetBalance` и `AssetLedgerEntry`.
+5. В профиле должно отображаться Telegram photo, если оно есть.
+6. На профиле подключите кошелек.
+7. Откройте покупку TDSD и проверьте курс `1 TDSD = 0.1 TON`.
+8. Создайте покупку TDSD.
+9. Оплатите через кошелек или вручную по показанному адресу проекта.
+10. Нажмите “Проверить статус”.
+11. Проверьте `AssetBalance` и `AssetLedgerEntry`.
 
 ## 8. Проверить TDSD
 
