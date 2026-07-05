@@ -74,8 +74,8 @@
 Проверить:
 
 - `TDSD_FIXED_PRICE_TON=0.1`
-- `PROJECT_TON_WALLET=<project TON wallet>`
-- `HOT_WALLET_ADDRESS=<hot wallet>`
+- `PROJECT_TON_WALLET=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo`
+- `HOT_WALLET_ADDRESS=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo`
 - `TREASURY_WALLET_ADDRESS=<treasury wallet>`
 - `TRANSFER_COMMISSION_PERCENT=10`
 - `TDSD_DEPOSITS_ENABLED=false` для fixed-price покупки

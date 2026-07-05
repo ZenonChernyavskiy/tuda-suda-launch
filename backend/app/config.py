@@ -38,7 +38,7 @@ TREASURY_WALLET_ADDRESS = os.getenv(
 ).strip()
 HOT_WALLET_ADDRESS = os.getenv(
     "HOT_WALLET_ADDRESS",
-    "UQB-gyjeCOixVUyVx-X_4FqhXeOwjCIUYnkue4vQESUx6f66",
+    "UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo",
 ).strip()
 HOT_WALLET_MNEMONIC = os.getenv("HOT_WALLET_MNEMONIC", "").strip()
 HOT_WALLET_JETTON_TRANSFER_GAS_TON = Decimal(

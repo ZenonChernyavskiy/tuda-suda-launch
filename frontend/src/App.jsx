@@ -54,6 +54,34 @@ const DEFAULT_FEE_CONFIG = {
   tdsd_jetton_master_address: "",
 };
 
+const RANKS = [
+  {
+    name: "Новичок",
+    condition: "стартовый ранг",
+    description: "Профиль только начинает накапливать историю.",
+  },
+  {
+    name: "Добряк",
+    condition: "карма от 50",
+    description: "Пользователь регулярно участвует в жизни проекта.",
+  },
+  {
+    name: "Меценат",
+    condition: "карма от 200",
+    description: "Заметная активность и стабильные успешные операции.",
+  },
+  {
+    name: "Легенда",
+    condition: "карма от 500",
+    description: "Высокий уровень доверия и вклада в сообщество.",
+  },
+  {
+    name: "Титан",
+    condition: "карма от 1000",
+    description: "Максимальный уровень доверия и активности.",
+  },
+];
+
 function displayName(user) {
   if (!user) return "Пользователь";
   if (user.username) return `@${user.username}`;
@@ -430,11 +458,92 @@ function newestFirst(items) {
   return [...items].sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
-function Stat({ label, value }) {
-  return (
-    <div className="stat">
+function Stat({ label, value, onClick }) {
+  const content = (
+    <>
       <span>{label}</span>
       <strong>{value}</strong>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button className="stat stat-button" onClick={onClick} type="button">
+        {content}
+      </button>
+    );
+  }
+  return (
+    <div className="stat">
+      {content}
+    </div>
+  );
+}
+
+function ProfileInfoSheet({ type, user, onClose }) {
+  if (!type) return null;
+
+  const modal = {
+    reputation: {
+      title: "Репутация",
+      body: [
+        "Репутация показывает, насколько профилю можно доверять внутри Tuda Suda.",
+        "Она зависит от успешных операций, стабильной активности, корректного поведения и общей истории участия.",
+        "Высокая репутация повышает доверие к пользователю и помогает сообществу лучше понимать надежность профиля.",
+      ],
+    },
+    karma: {
+      title: "Карма",
+      body: [
+        "Карма отражает полезную активность пользователя в проекте.",
+        "Она начисляется за активность, успешные переводы TDSD, участие в проекте, приглашение пользователей и корректное поведение.",
+        "Карма может снижаться за подозрительные действия, отмены, жалобы или нарушения. Повысить ее можно регулярным и честным участием.",
+      ],
+    },
+    rank: {
+      title: "Ранг",
+      body: [
+        "Ранг показывает текущий уровень активности и доверия профиля.",
+        `Ваш текущий ранг: ${user.rank || "Новичок"}.`,
+      ],
+    },
+  }[type];
+
+  return (
+    <div className="info-sheet-backdrop" onClick={onClose} role="presentation">
+      <section
+        aria-modal="true"
+        className="info-sheet"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <div className="info-sheet-title">
+          <h2>{modal.title}</h2>
+          <button className="sheet-close" onClick={onClose} type="button">
+            Закрыть
+          </button>
+        </div>
+        <div className="info-sheet-body">
+          {modal.body.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+          {type === "rank" ? (
+            <div className="rank-list">
+              {RANKS.map((rank) => (
+                <article
+                  className={rank.name === user.rank ? "rank-item current" : "rank-item"}
+                  key={rank.name}
+                >
+                  <div>
+                    <strong>{rank.name}</strong>
+                    <span>{rank.condition}</span>
+                  </div>
+                  <p>{rank.description}</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </section>
     </div>
   );
 }
@@ -1371,6 +1480,7 @@ function ProfileScreen({
   assetBalances,
   depositProps,
 }) {
+  const [profileInfo, setProfileInfo] = useState(null);
   const avatarPhotoUrl = user.photo_url || telegramPhotoUrl;
   const savedAddress = savedWallet?.wallet_address || user.ton_wallet_address || "";
   const savedAt = savedWallet?.connected_at || user.ton_wallet_connected_at;
@@ -1398,6 +1508,7 @@ function ProfileScreen({
   }
 
   return (
+    <>
     <main className="screen">
       <section className="profile">
         <span className="avatar">
@@ -1419,9 +1530,13 @@ function ProfileScreen({
 
       <section className="stats-grid">
         <Stat label="Telegram ID" value={user.telegram_id} />
-        <Stat label="Ранг" value={user.rank} />
-        <Stat label="Карма" value={user.karma} />
-        <Stat label="Репутация" value={user.reputation ?? 0} />
+        <Stat label="Ранг" onClick={() => setProfileInfo("rank")} value={user.rank} />
+        <Stat label="Карма" onClick={() => setProfileInfo("karma")} value={user.karma} />
+        <Stat
+          label="Репутация"
+          onClick={() => setProfileInfo("reputation")}
+          value={user.reputation ?? 0}
+        />
         <Stat label="TDSD" value={primaryBalance(userAssets(assetBalances))?.balance_display || "0"} />
       </section>
 
@@ -1537,6 +1652,12 @@ function ProfileScreen({
         </section>
       ) : null}
     </main>
+    <ProfileInfoSheet
+      onClose={() => setProfileInfo(null)}
+      type={profileInfo}
+      user={user}
+    />
+    </>
   );
 }
 

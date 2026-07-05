@@ -101,7 +101,8 @@ button {
 .operation-row,
 .deposit-row,
 .wallet-address,
-.notice {
+.notice,
+.info-sheet {
   border: 1px solid var(--line);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.07)),
@@ -227,6 +228,26 @@ button {
   gap: 12px;
   padding: 15px;
   border-radius: 22px;
+}
+
+.stat-button {
+  width: 100%;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    background 0.18s ease;
+}
+
+.stat-button:active {
+  transform: translateY(1px);
+}
+
+.stat-button:focus-visible {
+  outline: 2px solid rgba(110, 231, 249, 0.8);
+  outline-offset: 2px;
 }
 
 .stat strong {
@@ -670,6 +691,104 @@ button {
 .deposit-row .failed-reason {
   color: var(--danger);
   font-weight: 800;
+}
+
+.info-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  align-items: end;
+  justify-items: center;
+  padding: 18px 12px calc(18px + env(safe-area-inset-bottom));
+  background: rgba(2, 8, 18, 0.56);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.info-sheet {
+  width: min(100%, 520px);
+  max-height: min(78vh, 620px);
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  overflow: auto;
+  border-radius: 26px;
+}
+
+.info-sheet-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.info-sheet-title h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.sheet-close {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.info-sheet-body {
+  display: grid;
+  gap: 10px;
+}
+
+.info-sheet-body p {
+  margin: 0;
+  color: var(--muted-strong);
+  line-height: 1.45;
+}
+
+.rank-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.rank-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rank-item.current {
+  border-color: rgba(110, 231, 249, 0.38);
+  background: rgba(110, 231, 249, 0.1);
+}
+
+.rank-item div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rank-item strong,
+.rank-item span,
+.rank-item p {
+  overflow-wrap: anywhere;
+}
+
+.rank-item span {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .profile {
