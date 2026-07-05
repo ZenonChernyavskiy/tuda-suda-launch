@@ -534,6 +534,26 @@ def ensure_asset_deposit_columns() -> None:
             statements.append(
                 "ALTER TABLE asset_deposits ADD COLUMN failed_reason VARCHAR(500)"
             )
+        if "payout_status" not in columns:
+            statements.append(
+                "ALTER TABLE asset_deposits ADD COLUMN payout_status VARCHAR(32) DEFAULT 'pending'"
+            )
+        if "payout_tx_hash" not in columns:
+            statements.append(
+                "ALTER TABLE asset_deposits ADD COLUMN payout_tx_hash VARCHAR(128)"
+            )
+        if "payout_failed_reason" not in columns:
+            statements.append(
+                "ALTER TABLE asset_deposits ADD COLUMN payout_failed_reason VARCHAR(500)"
+            )
+        if "payout_sent_at" not in columns:
+            statements.append(
+                "ALTER TABLE asset_deposits ADD COLUMN payout_sent_at DATETIME"
+            )
+        if "payout_confirmed_at" not in columns:
+            statements.append(
+                "ALTER TABLE asset_deposits ADD COLUMN payout_confirmed_at DATETIME"
+            )
         if "created_at" not in columns:
             statements.append(
                 "ALTER TABLE asset_deposits ADD COLUMN created_at DATETIME"
@@ -552,5 +572,30 @@ def ensure_asset_deposit_columns() -> None:
                     "UPDATE asset_deposits "
                     "SET created_at = CURRENT_TIMESTAMP "
                     "WHERE created_at IS NULL"
+                )
+            )
+        updated_columns = {
+            row[1]
+            for row in connection.execute(text("PRAGMA table_info(asset_deposits)")).all()
+        }
+        if "payout_status" in updated_columns:
+            connection.execute(
+                text(
+                    "UPDATE asset_deposits "
+                    "SET payout_status = 'pending' "
+                    "WHERE payout_status IS NULL OR payout_status = ''"
+                )
+            )
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_asset_deposits_payout_status "
+                    "ON asset_deposits(payout_status)"
+                )
+            )
+        if "payout_tx_hash" in updated_columns:
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_asset_deposits_payout_tx_hash "
+                    "ON asset_deposits(payout_tx_hash)"
                 )
             )

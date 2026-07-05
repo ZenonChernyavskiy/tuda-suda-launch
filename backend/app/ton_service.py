@@ -50,6 +50,54 @@ def _toncenter_get(method: str, params: dict[str, Any]) -> Any:
     return payload.get("result")
 
 
+def _toncenter_post(method: str, params: dict[str, Any]) -> Any:
+    url = f"{TONCENTER_API_URL}/{method}"
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    if TONCENTER_API_KEY:
+        headers["X-API-Key"] = TONCENTER_API_KEY
+
+    request = Request(
+        url,
+        data=urlencode(params).encode("utf-8"),
+        headers=headers,
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise TonCenterError(f"TON Center HTTP {exc.code}: {detail}") from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise TonCenterError(f"TON Center request failed: {exc}") from exc
+
+    if not payload.get("ok"):
+        raise TonCenterError(str(payload.get("error") or payload))
+    return payload.get("result")
+
+
+def run_get_method(address: str, method: str, stack: list[Any]) -> Any:
+    return _toncenter_get(
+        "runGetMethod",
+        {
+            "address": address,
+            "method": method,
+            "stack": json.dumps(stack),
+        },
+    )
+
+
+def get_wallet_information(address: str) -> dict[str, Any]:
+    result = _toncenter_get("getWalletInformation", {"address": address})
+    return result if isinstance(result, dict) else {}
+
+
+def send_boc(boc_base64: str) -> Any:
+    return _toncenter_post("sendBoc", {"boc": boc_base64})
+
+
 def get_recent_transactions(address: str, limit: int | None = None) -> list[dict[str, Any]]:
     tx_limit = limit or TONCENTER_TX_LIMIT
     result = _toncenter_get("getTransactions", {"address": address, "limit": tx_limit})

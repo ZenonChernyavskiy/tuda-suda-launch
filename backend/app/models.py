@@ -257,6 +257,11 @@ class AssetDeposit(Base):
     provider: Mapped[str] = mapped_column(String(64), index=True)
     network: Mapped[str] = mapped_column(String(32), index=True)
     failed_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    payout_status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
+    payout_tx_hash: Mapped[str | None] = mapped_column(String(128), unique=True, index=True)
+    payout_failed_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    payout_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    payout_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

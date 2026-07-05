@@ -211,10 +211,14 @@ TDSD_FIXED_PRICE_TON=0.1
 TRANSFER_COMMISSION_PERCENT=10
 TREASURY_WALLET_ADDRESS=UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6
 HOT_WALLET_ADDRESS=UQB-gyjeCOixVUyVx-X_4FqhXeOwjCIUYnkue4vQESUx6f66
+HOT_WALLET_MNEMONIC=<hot wallet mnemonic words>
+HOT_WALLET_JETTON_TRANSFER_GAS_TON=0.08
 TDSD_JETTON_MASTER_ADDRESS=EQBZkfdol6WOj-GXByKLeRlo70ktYIQnTA5Hq_gT6KVYvY3n
 ```
 
-Фиксированная цена задается через `TDSD_FIXED_PRICE_TON`: сейчас `1 TDSD = 0.1 TON`. Если пользователь оплачивает 10 TON, gross-покупка составляет 100 TDSD. Комиссия платформы `PURCHASE_FEE_PERCENT` удерживается из TDSD перед зачислением: при 1% на внутренний баланс попадет 99 TDSD. `BUY_COMMISSION_PERCENT` оставлен как совместимый alias.
+Фиксированная цена задается через `TDSD_FIXED_PRICE_TON`: сейчас `1 TDSD = 0.1 TON`. Если пользователь оплачивает 10 TON, gross-покупка составляет 100 TDSD. Комиссия платформы `PURCHASE_FEE_PERCENT` удерживается из TDSD перед зачислением и on-chain выплатой: при 1% пользователь получает 99 TDSD. `BUY_COMMISSION_PERCENT` оставлен как совместимый alias.
+
+После подтверждения оплаты backend отправляет TDSD с hot wallet на кошелек пользователя. `HOT_WALLET_ADDRESS` должен совпадать с `HOT_WALLET_MNEMONIC`, а hot wallet должен иметь запас TDSD и TON для gas. Treasury mnemonic на сервер не добавляется. Если `HOT_WALLET_MNEMONIC` отсутствует, backend не падает и возвращает пользователю сообщение `Автоматическая выплата временно недоступна`.
 
 Для TDSD-подарка отправитель списывает полную сумму, получатель получает сумму за вычетом `TRANSFER_COMMISSION_PERCENT`, а treasury получает комиссию во внутреннем `AssetBalance`. Если отправитель дарит 100 TDSD, отправитель списывает 100 TDSD, получатель получает 90 TDSD, treasury получает 10 TDSD. Ledger фиксирует `gift_sent`, `gift_received`, `fee_transfer` и `treasury_income`.
 
@@ -279,6 +283,8 @@ Alembic migration `202606270001_stage8_initial_schema.py` создает:
 - `PUBLIC_API_URL`
 - `PROJECT_TON_WALLET`
 - `HOT_WALLET_ADDRESS`
+- `HOT_WALLET_MNEMONIC`
+- `HOT_WALLET_JETTON_TRANSFER_GAS_TON`
 - `TREASURY_WALLET_ADDRESS`
 - `PURCHASE_FEE_PERCENT`
 - `BUY_COMMISSION_PERCENT`

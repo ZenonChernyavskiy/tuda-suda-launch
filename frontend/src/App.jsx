@@ -217,11 +217,27 @@ function readTonBalanceNano(payload) {
 
 function statusLabel(status) {
   const labels = {
-    pending: "Ожидает",
-    confirmed: "Подтвержден",
-    failed: "Ошибка",
+    pending: "Ожидаем оплату",
+    confirmed: "Оплата найдена",
+    failed: "Ошибка отправки, обратитесь в поддержку",
   };
   return labels[status] || status;
+}
+
+function purchaseStatusLabel(deposit) {
+  if (!deposit) return "";
+  if (deposit.status === "pending") return "Ожидаем оплату";
+  if (deposit.status === "failed") return "Ошибка отправки, обратитесь в поддержку";
+  if (deposit.status === "confirmed") {
+    if (deposit.payout_status === "sent" || deposit.payout_status === "confirmed") {
+      return "TDSD отправлены";
+    }
+    if (deposit.payout_status === "failed") {
+      return "Ошибка отправки, обратитесь в поддержку";
+    }
+    return "Отправляем TDSD";
+  }
+  return statusLabel(deposit.status);
 }
 
 function depositSymbol(deposit) {
@@ -939,6 +955,10 @@ function TonTopUpScreen({
         {currentDeposit ? (
           <div className="deposit-box">
             <div className="wallet-address">
+              <span>Статус</span>
+              <b>{purchaseStatusLabel(currentDeposit)}</b>
+            </div>
+            <div className="wallet-address">
               <span>К покупке</span>
               <b>{depositAmountLabel(currentDeposit)}</b>
             </div>
@@ -967,6 +987,17 @@ function TonTopUpScreen({
               <span>Комментарий</span>
               <b>{currentDeposit.comment}</b>
             </div>
+            {currentDeposit.payout_tx_hash ? (
+              <div className="wallet-address">
+                <span>Выплата</span>
+                <b>{shortenAddress(currentDeposit.payout_tx_hash)}</b>
+              </div>
+            ) : null}
+            {currentDeposit.payout_status === "failed" && currentDeposit.payout_failed_reason ? (
+              <p className="failed-reason">
+                {userDepositMessage(currentDeposit.payout_failed_reason)}
+              </p>
+            ) : null}
             <p className="wallet-note">
               Оплатите указанную сумму TON и дождитесь подтверждения. Комментарий нужен
               для автоматического зачисления TDSD.
@@ -1010,14 +1041,22 @@ function TonTopUpScreen({
               <article className="deposit-row" key={deposit.id}>
                 <div>
                   <strong>{depositAmountLabel(deposit)}</strong>
-                  <span>{statusLabel(deposit.status)} · {formatDate(deposit.created_at)}</span>
+                  <span>{purchaseStatusLabel(deposit)} · {formatDate(deposit.created_at)}</span>
                   {deposit.confirmed_at ? (
-                    <p>Подтвержден: {formatDate(deposit.confirmed_at)}</p>
+                    <p>Оплата найдена: {formatDate(deposit.confirmed_at)}</p>
                   ) : null}
-                  {deposit.tx_hash ? <p>tx: {shortenAddress(deposit.tx_hash)}</p> : null}
+                  {deposit.tx_hash ? <p>Оплата tx: {shortenAddress(deposit.tx_hash)}</p> : null}
+                  {deposit.payout_tx_hash ? (
+                    <p>Выплата tx: {shortenAddress(deposit.payout_tx_hash)}</p>
+                  ) : null}
                   {deposit.comment ? <p>memo: {deposit.comment}</p> : null}
                   {deposit.status === "failed" && deposit.failed_reason ? (
                     <p className="failed-reason">{userDepositMessage(deposit.failed_reason)}</p>
+                  ) : null}
+                  {deposit.payout_status === "failed" && deposit.payout_failed_reason ? (
+                    <p className="failed-reason">
+                      {userDepositMessage(deposit.payout_failed_reason)}
+                    </p>
                   ) : null}
                 </div>
                 <b>{depositSymbol(deposit)}</b>
@@ -1934,7 +1973,15 @@ export default function App() {
       }
       await Promise.all([loadTonData(), loadAssetData(), loadReferrals()]);
       if (result.deposit.status === "confirmed") {
-        setSuccess("Пополнение подтверждено, внутренний баланс обновлен");
+        if (result.deposit.payout_status === "failed") {
+          setError(
+            userDepositMessage(
+              result.deposit.payout_failed_reason || result.message || "Ошибка отправки, обратитесь в поддержку",
+            ),
+          );
+        } else {
+          setSuccess(userDepositMessage(result.message || purchaseStatusLabel(result.deposit)));
+        }
       } else if (result.deposit.status === "failed") {
         setError(userDepositMessage(result.deposit.failed_reason || result.message));
       } else {

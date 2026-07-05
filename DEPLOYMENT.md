@@ -64,6 +64,8 @@ VITE_ENABLE_ADMIN=false
 ```env
 PROJECT_TON_WALLET=UQB-gyjeCOixVUyVx-X_4FqhXeOwjCIUYnkue4vQESUx6f66
 HOT_WALLET_ADDRESS=UQB-gyjeCOixVUyVx-X_4FqhXeOwjCIUYnkue4vQESUx6f66
+HOT_WALLET_MNEMONIC=<hot wallet mnemonic words>
+HOT_WALLET_JETTON_TRANSFER_GAS_TON=0.08
 TONCENTER_API_KEY=<optional key>
 ```
 
@@ -77,7 +79,9 @@ TRANSFER_COMMISSION_PERCENT=10
 TREASURY_WALLET_ADDRESS=UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6
 ```
 
-`TDSD_FIXED_PRICE_TON=0.1` задает фиксированную цену `1 TDSD = 0.1 TON`. `PURCHASE_FEE_PERCENT=1` удерживает 1% из gross-суммы TDSD перед финальным зачислением на внутренний баланс. `BUY_COMMISSION_PERCENT` оставлен как совместимый alias. `TRANSFER_COMMISSION_PERCENT=10` удерживает 10% из суммы TDSD-дара: отправитель списывает полную сумму, получатель получает 90%, treasury получает 10%.
+`TDSD_FIXED_PRICE_TON=0.1` задает фиксированную цену `1 TDSD = 0.1 TON`. `PURCHASE_FEE_PERCENT=1` удерживает 1% из gross-суммы TDSD перед финальным зачислением на внутренний баланс и перед on-chain выплатой с hot wallet. `BUY_COMMISSION_PERCENT` оставлен как совместимый alias. `TRANSFER_COMMISSION_PERCENT=10` удерживает 10% из суммы TDSD-дара: отправитель списывает полную сумму, получатель получает 90%, treasury получает 10%.
+
+Hot wallet должен совпадать с `HOT_WALLET_ADDRESS`, иметь запас TDSD и небольшой запас TON для gas. На сервере хранится только `HOT_WALLET_MNEMONIC`; treasury mnemonic не нужен и не должен храниться на сервере. Если `HOT_WALLET_MNEMONIC` не задан, покупка может быть подтверждена, но автоматическая выплата вернет пользователю сообщение `Автоматическая выплата временно недоступна`.
 
 Для TDSD после deploy Jetton:
 

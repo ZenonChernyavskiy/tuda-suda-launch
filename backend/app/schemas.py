@@ -271,6 +271,11 @@ class AssetDepositCreateResponse(BaseModel):
     provider: str
     network: str
     status: Literal["pending"]
+    payout_status: Literal["pending", "sent", "confirmed", "failed"] = "pending"
+    payout_tx_hash: str | None = None
+    payout_failed_reason: str | None = None
+    payout_sent_at: datetime | None = None
+    payout_confirmed_at: datetime | None = None
 
 
 class AssetDepositPublic(BaseModel):
@@ -291,6 +296,11 @@ class AssetDepositPublic(BaseModel):
     provider: str
     network: str
     failed_reason: str | None = None
+    payout_status: Literal["pending", "sent", "confirmed", "failed"] = "pending"
+    payout_tx_hash: str | None = None
+    payout_failed_reason: str | None = None
+    payout_sent_at: datetime | None = None
+    payout_confirmed_at: datetime | None = None
     created_at: datetime
     confirmed_at: datetime | None
 

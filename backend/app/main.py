@@ -54,6 +54,13 @@ from .fee_service import (
     calculate_transfer_fee,
     decimal_label,
 )
+from .hot_wallet_payout import (
+    PUBLIC_SEND_FAILED_MESSAGE,
+    PUBLIC_UNAVAILABLE_MESSAGE,
+    HotWalletPayoutFailed,
+    HotWalletPayoutUnavailable,
+    send_tdsd_from_hot_wallet,
+)
 from .migrations import init_db
 from .providers import ProviderError, get_provider_for_asset
 from .referral_service import (
@@ -388,6 +395,9 @@ def serialize_asset_deposit(
     tx_hash = deposit.tx_hash
     if tx_hash and tx_hash.startswith("pending:"):
         tx_hash = None
+    payout_tx_hash = deposit.payout_tx_hash
+    if payout_tx_hash and payout_tx_hash.startswith("pending:"):
+        payout_tx_hash = None
     fixed_price_quote = None
     if deposit.provider == "tdsd_fixed_price":
         fixed_price_quote = calculate_tdsd_fixed_price_quote(
@@ -425,6 +435,11 @@ def serialize_asset_deposit(
         provider=deposit.provider,
         network=deposit.network,
         failed_reason=deposit.failed_reason,
+        payout_status=deposit.payout_status or "pending",
+        payout_tx_hash=payout_tx_hash,
+        payout_failed_reason=deposit.payout_failed_reason,
+        payout_sent_at=deposit.payout_sent_at,
+        payout_confirmed_at=deposit.payout_confirmed_at,
         created_at=deposit.created_at,
         confirmed_at=deposit.confirmed_at,
     )
@@ -433,6 +448,9 @@ def serialize_asset_deposit(
 def serialize_asset_deposit_create(
     deposit: models.AssetDeposit,
 ) -> schemas.AssetDepositCreateResponse:
+    payout_tx_hash = deposit.payout_tx_hash
+    if payout_tx_hash and payout_tx_hash.startswith("pending:"):
+        payout_tx_hash = None
     fixed_price_quote = None
     if deposit.provider == "tdsd_fixed_price":
         fixed_price_quote = calculate_tdsd_fixed_price_quote(
@@ -468,6 +486,11 @@ def serialize_asset_deposit_create(
         provider=deposit.provider,
         network=deposit.network,
         status="pending",
+        payout_status=deposit.payout_status or "pending",
+        payout_tx_hash=payout_tx_hash,
+        payout_failed_reason=deposit.payout_failed_reason,
+        payout_sent_at=deposit.payout_sent_at,
+        payout_confirmed_at=deposit.payout_confirmed_at,
     )
 
 
@@ -927,6 +950,135 @@ def asset_deposit_verify_response(
         asset_balance=serialized_balance,
         message=message,
     )
+
+
+def is_tdsd_fixed_price_purchase(deposit: models.AssetDeposit) -> bool:
+    return (
+        deposit.asset.symbol == TDSD_ASSET_SYMBOL
+        and deposit.provider == "tdsd_fixed_price"
+    )
+
+
+def tdsd_payout_user_message(deposit: models.AssetDeposit) -> str:
+    if deposit.status == "pending":
+        return "Ожидаем оплату"
+    if deposit.status == "failed":
+        return "Ошибка отправки, обратитесь в поддержку"
+    payout_status = deposit.payout_status or "pending"
+    if payout_status == "pending":
+        return "Отправляем TDSD"
+    if payout_status in {"sent", "confirmed"}:
+        return "TDSD отправлены"
+    if payout_status == "failed":
+        if deposit.payout_failed_reason == PUBLIC_UNAVAILABLE_MESSAGE:
+            return PUBLIC_UNAVAILABLE_MESSAGE
+        return PUBLIC_SEND_FAILED_MESSAGE
+    return "Оплата найдена"
+
+
+def tdsd_payout_amount_units(deposit: models.AssetDeposit) -> int:
+    if is_tdsd_fixed_price_purchase(deposit):
+        return calculate_buy_commission(int(deposit.amount_units or 0)).credited_amount_units
+    return int(deposit.amount_units or 0)
+
+
+def is_pending_payout_lock(tx_hash: str | None) -> bool:
+    return bool(tx_hash and tx_hash.startswith("pending:"))
+
+
+def ensure_tdsd_hot_wallet_payout(
+    db: Session,
+    deposit: models.AssetDeposit,
+    current_user: models.User,
+    payout_amount_units: int,
+) -> str:
+    if not is_tdsd_fixed_price_purchase(deposit):
+        return "Пополнение подтверждено"
+    if deposit.status != "confirmed":
+        return tdsd_payout_user_message(deposit)
+
+    payout_status = deposit.payout_status or "pending"
+    if payout_status in {"sent", "confirmed"}:
+        return tdsd_payout_user_message(deposit)
+    if deposit.payout_tx_hash and not is_pending_payout_lock(deposit.payout_tx_hash):
+        return tdsd_payout_user_message(deposit)
+    if is_pending_payout_lock(deposit.payout_tx_hash):
+        return "Отправляем TDSD"
+
+    if not current_user.ton_wallet_address:
+        deposit.payout_status = "failed"
+        deposit.payout_failed_reason = "Сначала подключите кошелек для получения TDSD"
+        deposit.payout_tx_hash = None
+        deposit.payout_sent_at = None
+        db.commit()
+        db.refresh(deposit)
+        return PUBLIC_SEND_FAILED_MESSAGE
+
+    deposit.payout_status = "pending"
+    deposit.payout_failed_reason = None
+    deposit.payout_tx_hash = f"pending:{deposit.id}:{secrets.token_urlsafe(12)}"
+    deposit.payout_sent_at = datetime.utcnow()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        logger.warning("TDSD hot wallet payout lock failed for purchase #%s", deposit.id)
+        return "Отправляем TDSD"
+    db.refresh(deposit)
+
+    try:
+        payout = send_tdsd_from_hot_wallet(
+            recipient_wallet_address=deposit.wallet_address,
+            amount_units=payout_amount_units,
+            purchase_id=deposit.id,
+        )
+    except HotWalletPayoutUnavailable:
+        deposit.payout_status = "failed"
+        deposit.payout_failed_reason = PUBLIC_UNAVAILABLE_MESSAGE
+        deposit.payout_tx_hash = None
+        deposit.payout_sent_at = None
+        db.commit()
+        db.refresh(deposit)
+        logger.warning("TDSD hot wallet payout unavailable for purchase #%s", deposit.id)
+        return PUBLIC_UNAVAILABLE_MESSAGE
+    except HotWalletPayoutFailed:
+        deposit.payout_status = "failed"
+        deposit.payout_failed_reason = PUBLIC_SEND_FAILED_MESSAGE
+        deposit.payout_tx_hash = None
+        deposit.payout_sent_at = None
+        db.commit()
+        db.refresh(deposit)
+        logger.warning("TDSD hot wallet payout failed for purchase #%s", deposit.id)
+        return PUBLIC_SEND_FAILED_MESSAGE
+
+    used_payout = db.scalar(
+        select(models.AssetDeposit).where(
+            models.AssetDeposit.payout_tx_hash == payout.tx_hash,
+            models.AssetDeposit.id != deposit.id,
+        )
+    )
+    if used_payout:
+        deposit.payout_status = "failed"
+        deposit.payout_failed_reason = "Tx hash выплаты уже сохранен в другой покупке"
+        deposit.payout_tx_hash = None
+        deposit.payout_sent_at = None
+        db.commit()
+        db.refresh(deposit)
+        logger.error("Duplicate TDSD payout tx hash for purchase #%s", deposit.id)
+        return PUBLIC_SEND_FAILED_MESSAGE
+
+    deposit.payout_status = "sent"
+    deposit.payout_tx_hash = payout.tx_hash
+    deposit.payout_failed_reason = None
+    deposit.payout_sent_at = datetime.utcnow()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        logger.error("Could not save TDSD payout tx hash for purchase #%s", deposit.id)
+        return PUBLIC_SEND_FAILED_MESSAGE
+    db.refresh(deposit)
+    return "TDSD отправлены"
 
 
 def get_or_create_user(
@@ -1788,9 +1940,24 @@ def verify_asset_deposit(
                 models.AssetBalance.asset_id == deposit.asset_id,
             )
         )
+        message = "Пополнение уже подтверждено"
+        if is_tdsd_fixed_price_purchase(deposit):
+            try:
+                message = ensure_tdsd_hot_wallet_payout(
+                    db=db,
+                    deposit=deposit,
+                    current_user=current_user,
+                    payout_amount_units=tdsd_payout_amount_units(deposit),
+                )
+            except ValueError as exc:
+                deposit.payout_status = "failed"
+                deposit.payout_failed_reason = str(exc)[:500]
+                db.commit()
+                db.refresh(deposit)
+                message = PUBLIC_SEND_FAILED_MESSAGE
         return asset_deposit_verify_response(
             deposit,
-            "Пополнение уже подтверждено",
+            message,
             balance,
         )
     if deposit.status == "failed":
@@ -1958,9 +2125,19 @@ def verify_asset_deposit(
     db.refresh(deposit)
     db.refresh(balance)
     db.refresh(current_user)
+    message = "Пополнение подтверждено"
+    if is_tdsd_fixed_price_purchase(deposit):
+        message = ensure_tdsd_hot_wallet_payout(
+            db=db,
+            deposit=deposit,
+            current_user=current_user,
+            payout_amount_units=credit_amount_units,
+        )
+        db.refresh(balance)
+        db.refresh(current_user)
     return asset_deposit_verify_response(
         deposit,
-        "Пополнение подтверждено",
+        message,
         balance,
     )
 

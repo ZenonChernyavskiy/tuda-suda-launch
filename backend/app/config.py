@@ -40,6 +40,10 @@ HOT_WALLET_ADDRESS = os.getenv(
     "HOT_WALLET_ADDRESS",
     "UQB-gyjeCOixVUyVx-X_4FqhXeOwjCIUYnkue4vQESUx6f66",
 ).strip()
+HOT_WALLET_MNEMONIC = os.getenv("HOT_WALLET_MNEMONIC", "").strip()
+HOT_WALLET_JETTON_TRANSFER_GAS_TON = Decimal(
+    os.getenv("HOT_WALLET_JETTON_TRANSFER_GAS_TON", "0.08")
+)
 TON_NETWORK = os.getenv("TON_NETWORK", "testnet")
 PROJECT_TON_WALLET = os.getenv("PROJECT_TON_WALLET", HOT_WALLET_ADDRESS).strip()
 TONCENTER_API_URL = os.getenv(
@@ -131,6 +135,8 @@ def validate_production_settings() -> None:
             errors.append(f"{env_name} must be between 0 and 100")
     if TDSD_FIXED_PRICE_TON <= 0:
         errors.append("TDSD_FIXED_PRICE_TON must be greater than 0")
+    if HOT_WALLET_JETTON_TRANSFER_GAS_TON <= 0:
+        errors.append("HOT_WALLET_JETTON_TRANSFER_GAS_TON must be greater than 0")
     if not REFERRAL_REWARD_ASSET_SYMBOL:
         errors.append("REFERRAL_REWARD_ASSET_SYMBOL is required")
     if REFERRALS_ENABLED and IS_PRODUCTION and not TELEGRAM_BOT_USERNAME:

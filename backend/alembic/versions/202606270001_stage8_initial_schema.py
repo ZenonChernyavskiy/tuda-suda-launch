@@ -185,9 +185,15 @@ def upgrade() -> None:
         sa.Column("provider", sa.String(length=64), nullable=False),
         sa.Column("network", sa.String(length=32), nullable=False),
         sa.Column("failed_reason", sa.String(length=500), nullable=True),
+        sa.Column("payout_status", sa.String(length=32), nullable=False, server_default="pending"),
+        sa.Column("payout_tx_hash", sa.String(length=128), nullable=True),
+        sa.Column("payout_failed_reason", sa.String(length=500), nullable=True),
+        sa.Column("payout_sent_at", sa.DateTime(), nullable=True),
+        sa.Column("payout_confirmed_at", sa.DateTime(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column("confirmed_at", sa.DateTime(), nullable=True),
         sa.UniqueConstraint("tx_hash"),
+        sa.UniqueConstraint("payout_tx_hash"),
         sa.UniqueConstraint("comment"),
     )
     op.create_index("ix_asset_deposits_id", "asset_deposits", ["id"])
@@ -200,6 +206,8 @@ def upgrade() -> None:
     op.create_index("ix_asset_deposits_status", "asset_deposits", ["status"])
     op.create_index("ix_asset_deposits_provider", "asset_deposits", ["provider"])
     op.create_index("ix_asset_deposits_network", "asset_deposits", ["network"])
+    op.create_index("ix_asset_deposits_payout_status", "asset_deposits", ["payout_status"])
+    op.create_index("ix_asset_deposits_payout_tx_hash", "asset_deposits", ["payout_tx_hash"])
     op.create_index("ix_asset_deposits_created_at", "asset_deposits", ["created_at"])
 
     op.create_table(
