@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -8,6 +9,9 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from .config import TONCENTER_API_KEY, TONCENTER_API_URL, TONCENTER_TX_LIMIT
+
+
+logger = logging.getLogger("tuda_suda.ton_service")
 
 
 class TonCenterError(RuntimeError):
@@ -78,15 +82,83 @@ def _toncenter_post(method: str, params: dict[str, Any]) -> Any:
     return payload.get("result")
 
 
-def run_get_method(address: str, method: str, stack: list[Any]) -> Any:
-    return _toncenter_get(
-        "runGetMethod",
-        {
-            "address": address,
-            "method": method,
-            "stack": json.dumps(stack),
-        },
+def _toncenter_post_json(method: str, body: dict[str, Any]) -> dict[str, Any]:
+    url = f"{TONCENTER_API_URL}/{method}"
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    if TONCENTER_API_KEY:
+        headers["X-API-Key"] = TONCENTER_API_KEY
+
+    request = Request(
+        url,
+        data=json.dumps(body).encode("utf-8"),
+        headers=headers,
+        method="POST",
     )
+    try:
+        with urlopen(request, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise TonCenterError(f"TON Center HTTP {exc.code}: {detail}") from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise TonCenterError(f"TON Center request failed: {exc}") from exc
+
+    return payload if isinstance(payload, dict) else {"ok": False, "result": payload}
+
+
+def run_get_method(address: str, method: str, stack: list[Any]) -> Any:
+    endpoint = f"{TONCENTER_API_URL}/runGetMethod"
+    body = {
+        "address": address,
+        "method": method,
+        "stack": stack,
+    }
+    logger.info(
+        "Calling Toncenter runGetMethod endpoint=%s address=%s method=%s has_stack=%s",
+        endpoint,
+        address,
+        method,
+        bool(stack),
+    )
+    try:
+        payload = _toncenter_post_json("runGetMethod", body)
+    except TonCenterError as exc:
+        logger.exception(
+            "Toncenter runGetMethod request failed endpoint=%s address=%s "
+            "method=%s has_stack=%s exception_type=%s exception=%s",
+            endpoint,
+            address,
+            method,
+            bool(stack),
+            type(exc).__name__,
+            str(exc),
+        )
+        raise
+
+    logger.info(
+        "Toncenter runGetMethod response endpoint=%s address=%s method=%s "
+        "has_stack=%s response=%s",
+        endpoint,
+        address,
+        method,
+        bool(stack),
+        payload,
+    )
+    if not payload.get("ok"):
+        logger.error(
+            "Toncenter runGetMethod returned error endpoint=%s address=%s "
+            "method=%s has_stack=%s response=%s",
+            endpoint,
+            address,
+            method,
+            bool(stack),
+            payload,
+        )
+        raise TonCenterError(str(payload.get("error") or payload))
+    return payload.get("result")
 
 
 def get_wallet_information(address: str) -> dict[str, Any]:
