@@ -210,16 +210,17 @@ BUY_COMMISSION_PERCENT=1
 TDSD_FIXED_PRICE_TON=0.1
 TRANSFER_COMMISSION_PERCENT=10
 TREASURY_WALLET_ADDRESS=UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6
-PROJECT_TON_WALLET=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo
 HOT_WALLET_ADDRESS=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo
 HOT_WALLET_MNEMONIC=<hot wallet mnemonic words>
 HOT_WALLET_JETTON_TRANSFER_GAS_TON=0.08
+# Deprecated: use HOT_WALLET_ADDRESS instead.
+# PROJECT_TON_WALLET=
 TDSD_JETTON_MASTER_ADDRESS=EQBZkfdol6WOj-GXByKLeRlo70ktYIQnTA5Hq_gT6KVYvY3n
 ```
 
 Фиксированная цена задается через `TDSD_FIXED_PRICE_TON`: сейчас `1 TDSD = 0.1 TON`. Если пользователь оплачивает 10 TON, gross-покупка составляет 100 TDSD. Комиссия платформы `PURCHASE_FEE_PERCENT` удерживается из TDSD перед зачислением и on-chain выплатой: при 1% пользователь получает 99 TDSD. `BUY_COMMISSION_PERCENT` оставлен как совместимый alias.
 
-`PROJECT_TON_WALLET` отвечает за адрес приема оплаты TON при fixed-price покупке TDSD и попадает в инструкции покупки как публичный `target_wallet_address`. `HOT_WALLET_ADDRESS` отвечает за кошелек, который подписывает on-chain выплату TDSD пользователю. Если они совпадают, один кошелек принимает оплату и отправляет TDSD; если отличаются, frontend показывает адрес из `PROJECT_TON_WALLET`.
+`HOT_WALLET_ADDRESS` отвечает за прием TON при fixed-price покупке TDSD и попадает в инструкции покупки как публичный `payment_address`. Этот же hot wallet подписывает on-chain выплату TDSD пользователю. `PROJECT_TON_WALLET` больше не нужен: backend поддерживает его только как временный fallback для старых серверных env, если `HOT_WALLET_ADDRESS` еще не задан.
 
 После подтверждения оплаты backend отправляет TDSD с hot wallet на кошелек пользователя. `HOT_WALLET_ADDRESS` должен совпадать с `HOT_WALLET_MNEMONIC`, а hot wallet должен иметь запас TDSD и TON для gas. Treasury mnemonic на сервер не добавляется. Если `HOT_WALLET_MNEMONIC` отсутствует, backend не падает и возвращает пользователю сообщение `Автоматическая выплата временно недоступна`.
 
@@ -284,7 +285,6 @@ Alembic migration `202606270001_stage8_initial_schema.py` создает:
 - `CORS_ORIGINS`
 - `PUBLIC_APP_URL`
 - `PUBLIC_API_URL`
-- `PROJECT_TON_WALLET`
 - `HOT_WALLET_ADDRESS`
 - `HOT_WALLET_MNEMONIC`
 - `HOT_WALLET_JETTON_TRANSFER_GAS_TON`

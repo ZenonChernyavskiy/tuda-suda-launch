@@ -48,7 +48,7 @@ const DEFAULT_FEE_CONFIG = {
   tdsd_per_ton: "10",
   transfer_fee_percent: "10",
   transfer_fee_asset_symbol: "TDSD",
-  project_ton_wallet_address: "",
+  payment_address: "",
   treasury_wallet_address: "",
   hot_wallet_address: "",
   tdsd_jetton_master_address: "",
@@ -938,7 +938,8 @@ function TonTopUpScreen({
       ? amount
       : calculateFixedPricePaymentDisplay(tdsdAmountDisplay, selectedAsset, fixedPriceTon)
     : "";
-  const paymentAddress = currentDeposit?.target_wallet_address || "";
+  const paymentAddress =
+    currentDeposit?.payment_address || currentDeposit?.target_wallet_address || "";
   const balanceText = selectedBalance
     ? `${selectedBalance.balance_display} ${selectedBalance.symbol}`
     : selectedAsset?.symbol || USER_ASSET_SYMBOL;
@@ -1118,7 +1119,7 @@ function TonTopUpScreen({
                 onClick={() => onPayDeposit(currentDeposit)}
                 type="button"
               >
-                {paying ? "Открываем кошелек..." : "Оплатить через кошелек"}
+                {paying ? "Открываем кошелек..." : "Оплатить через кошелёк"}
               </button>
             ) : (
               <p className="wallet-note">
@@ -2058,7 +2059,7 @@ export default function App() {
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [
           {
-            address: deposit.target_wallet_address,
+            address: deposit.payment_address || deposit.target_wallet_address,
             amount: depositPaymentAmountUnits(deposit),
             payload: encodeTonTextCommentPayload(deposit.comment),
           },

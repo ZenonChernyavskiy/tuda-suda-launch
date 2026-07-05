@@ -56,9 +56,9 @@
 
 ## Кошелек оплаты TON
 
-- Для fixed-price покупки используется `PROJECT_TON_WALLET`.
-- Backend также отдает `project_ton_wallet_address` в `/fees/config`, чтобы frontend мог иметь актуальный адрес из env/config.
-- На сервере нужно проверить, что `PROJECT_TON_WALLET` задан реальным project TON wallet.
+- Для fixed-price покупки используется `HOT_WALLET_ADDRESS`.
+- Backend отдает `payment_address` в ответе создания покупки, чтобы frontend показывал актуальный адрес из env/config.
+- На сервере нужно проверить, что `HOT_WALLET_ADDRESS` задан реальным hot wallet.
 
 ## Telegram profile photo
 
@@ -74,7 +74,6 @@
 Проверить:
 
 - `TDSD_FIXED_PRICE_TON=0.1`
-- `PROJECT_TON_WALLET=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo`
 - `HOT_WALLET_ADDRESS=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo`
 - `TREASURY_WALLET_ADDRESS=<treasury wallet>`
 - `TRANSFER_COMMISSION_PERCENT=10`
@@ -92,7 +91,7 @@
 - Расчет комиссии перевода 100 TDSD: 90 TDSD получателю, 10 TDSD комиссия.
 - Расчет покупки 100 TDSD: 10 TON к оплате, 99 TDSD к зачислению после 1% комиссии покупки.
 - `photo_url` сохраняется и возвращается в `UserPublic`.
-- `project_ton_wallet_address` возвращается в `/fees/config`.
+- `payment_address` возвращается в ответе создания покупки.
 - `docker compose` локально не проверен: Docker CLI отсутствует на машине (`docker: command not found`).
 
 ## Как протестировать после деплоя

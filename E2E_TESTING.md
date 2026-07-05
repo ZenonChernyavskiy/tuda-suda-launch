@@ -148,14 +148,14 @@ Backend env:
 
 ```env
 TON_NETWORK=testnet
-PROJECT_TON_WALLET=<project testnet TON wallet>
+HOT_WALLET_ADDRESS=<hot wallet address>
 TONCENTER_API_KEY=<optional>
 ```
 
 Проверка:
 
 1. Создайте TON deposit во frontend.
-2. Отправьте ровно указанную сумму testnet TON на project wallet.
+2. Отправьте ровно указанную сумму testnet TON на hot wallet.
 3. Обязательно добавьте memo/comment из приложения.
 4. Нажмите “Проверить статус”.
 5. Проверьте:

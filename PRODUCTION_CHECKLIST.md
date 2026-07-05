@@ -59,8 +59,8 @@
 
 ## TON Deposits
 
-- [ ] `PROJECT_TON_WALLET` задан.
-- [ ] Testnet wallet проекта доступен.
+- [ ] `HOT_WALLET_ADDRESS` задан.
+- [ ] Hot wallet доступен и имеет TON для gas.
 - [ ] Депозит создается.
 - [ ] Memo/comment виден пользователю.
 - [ ] Проверка депозита подтверждает только корректную transaction.

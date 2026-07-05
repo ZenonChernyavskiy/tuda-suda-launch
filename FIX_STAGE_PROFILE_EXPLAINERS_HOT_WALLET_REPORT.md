@@ -19,15 +19,12 @@
 Актуальный адрес добавлен в backend defaults и env examples:
 
 ```env
-PROJECT_TON_WALLET=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo
 HOT_WALLET_ADDRESS=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo
 ```
 
-Frontend не хранит адрес оплаты TDSD. Экран покупки показывает `target_wallet_address` из ответа backend на создание покупки.
+Frontend не хранит адрес оплаты TDSD. Экран покупки показывает `payment_address` из ответа backend на создание покупки.
 
-За адрес приема оплаты TON отвечает `PROJECT_TON_WALLET`. Именно он попадает в `target_wallet_address` и показывается пользователю при покупке TDSD.
-
-За адрес hot wallet, который подписывает и отправляет TDSD пользователю, отвечает `HOT_WALLET_ADDRESS`.
+За прием оплаты TON и подпись отправки TDSD отвечает `HOT_WALLET_ADDRESS`.
 
 `HOT_WALLET_MNEMONIC` остается только на backend, не логируется и не передается во frontend.
 
@@ -61,7 +58,6 @@ Frontend не хранит адрес оплаты TDSD. Экран покупк
 Проверить на сервере:
 
 ```env
-PROJECT_TON_WALLET=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo
 HOT_WALLET_ADDRESS=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo
 HOT_WALLET_MNEMONIC=
 HOT_WALLET_JETTON_TRANSFER_GAS_TON=0.08
@@ -70,7 +66,7 @@ TDSD_FIXED_PRICE_TON=0.1
 PURCHASE_FEE_PERCENT=1
 ```
 
-Если `PROJECT_TON_WALLET` и `HOT_WALLET_ADDRESS` отличаются, пользователь увидит адрес оплаты из `PROJECT_TON_WALLET`, а TDSD будут отправляться с `HOT_WALLET_ADDRESS`.
+`PROJECT_TON_WALLET` больше не нужен и оставлен только как временный fallback для старых серверных env.
 
 ## Проверки
 
@@ -79,6 +75,6 @@ PURCHASE_FEE_PERCENT=1
 - Backend compile проходит.
 - `GET /health` возвращает `ok`.
 - `GET /ready` возвращает `ready`.
-- `/fees/config` возвращает новый `project_ton_wallet_address` и `hot_wallet_address`.
-- `/asset-deposits/create` для `TDSD` возвращает новый `target_wallet_address`.
+- `/fees/config` возвращает новый `payment_address` и `hot_wallet_address`.
+- `/asset-deposits/create` для `TDSD` возвращает новый `payment_address`.
 - Docker compose локально не проверен: на машине отсутствует Docker CLI.

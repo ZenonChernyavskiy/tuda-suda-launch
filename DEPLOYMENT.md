@@ -62,10 +62,11 @@ VITE_ENABLE_ADMIN=false
 Для TON testnet deposits:
 
 ```env
-PROJECT_TON_WALLET=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo
 HOT_WALLET_ADDRESS=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo
 HOT_WALLET_MNEMONIC=<hot wallet mnemonic words>
 HOT_WALLET_JETTON_TRANSFER_GAS_TON=0.08
+# Deprecated: use HOT_WALLET_ADDRESS instead.
+# PROJECT_TON_WALLET=
 TONCENTER_API_KEY=<optional key>
 ```
 
@@ -81,7 +82,7 @@ TREASURY_WALLET_ADDRESS=UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6
 
 `TDSD_FIXED_PRICE_TON=0.1` задает фиксированную цену `1 TDSD = 0.1 TON`. `PURCHASE_FEE_PERCENT=1` удерживает 1% из gross-суммы TDSD перед финальным зачислением на внутренний баланс и перед on-chain выплатой с hot wallet. `BUY_COMMISSION_PERCENT` оставлен как совместимый alias. `TRANSFER_COMMISSION_PERCENT=10` удерживает 10% из суммы TDSD-дара: отправитель списывает полную сумму, получатель получает 90%, treasury получает 10%.
 
-`PROJECT_TON_WALLET` отвечает за адрес приема оплаты TON при покупке TDSD. `HOT_WALLET_ADDRESS` отвечает за кошелек, который подписывает on-chain выплату TDSD. Если эти адреса отличаются, пользователь увидит в оплате `PROJECT_TON_WALLET`, а TDSD уйдут с `HOT_WALLET_ADDRESS`.
+`HOT_WALLET_ADDRESS` отвечает за прием оплаты TON при покупке TDSD и за подпись on-chain выплаты TDSD пользователю. `PROJECT_TON_WALLET` больше не нужен и поддерживается только как временный fallback для старых серверных env, если `HOT_WALLET_ADDRESS` еще не задан.
 
 Hot wallet должен совпадать с `HOT_WALLET_ADDRESS`, иметь запас TDSD и небольшой запас TON для gas. На сервере хранится только `HOT_WALLET_MNEMONIC`; treasury mnemonic не нужен и не должен храниться на сервере. Если `HOT_WALLET_MNEMONIC` не задан, покупка может быть подтверждена, но автоматическая выплата вернет пользователю сообщение `Автоматическая выплата временно недоступна`.
 

@@ -55,7 +55,7 @@
 - `TDSD_DEPOSITS_ENABLED` — `false` для fixed-price покупки TDSD за TON, `true` только когда on-chain Jetton deposit реально готов.
 - `TDSD_JETTON_MASTER_ADDRESS` — deployed TDSD master address.
 - `TDSD_PROJECT_JETTON_WALLET` — project TDSD wallet address; обязателен при `TDSD_DEPOSITS_ENABLED=true`.
-- `PROJECT_TON_WALLET` — project wallet для fixed-price покупки при `TDSD_DEPOSITS_ENABLED=false`.
+- `HOT_WALLET_ADDRESS` — hot wallet для fixed-price покупки при `TDSD_DEPOSITS_ENABLED=false`.
 - `TDSD_FIXED_PRICE_TON` — фиксированная цена, сейчас `0.1`.
 - `TON_NETWORK` — техническая сеть для провайдера, сейчас используется backend-интеграцией.
 

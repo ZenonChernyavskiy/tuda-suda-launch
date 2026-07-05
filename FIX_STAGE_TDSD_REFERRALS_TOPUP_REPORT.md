@@ -86,7 +86,7 @@
 - `VITE_API_URL=https://api.tudasuda.tech`
 - `TDSD_FIXED_PRICE_TON=0.1`
 - `TDSD_DEPOSITS_ENABLED=false` для fixed-price покупки
-- `PROJECT_TON_WALLET=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo` для fixed-price покупки
+- `HOT_WALLET_ADDRESS=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo` для fixed-price покупки
 - `TON_NETWORK=testnet`
 - `TDSD_JETTON_MASTER_ADDRESS=<master>` если on-chain Jetton уже задеплоен
 - `TDSD_PROJECT_JETTON_WALLET=<project jetton wallet>` только для `TDSD_DEPOSITS_ENABLED=true`

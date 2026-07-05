@@ -30,7 +30,6 @@ from .config import (
     MAX_DEPOSIT_TON,
     MIN_DEPOSIT_TON,
     HOT_WALLET_ADDRESS,
-    PROJECT_TON_WALLET,
     REFERRAL_REWARD_ASSET_SYMBOL,
     REFERRAL_REWARD_PERCENT,
     REFERRALS_ENABLED,
@@ -44,6 +43,7 @@ from .config import (
     TRANSFER_COMMISSION_PERCENT,
     TREASURY_WALLET_ADDRESS,
     configure_logging,
+    get_tdsd_payment_wallet_address,
     validate_production_settings,
 )
 from .database import get_db
@@ -429,6 +429,7 @@ def serialize_asset_deposit(
             if fixed_price_quote
             else None
         ),
+        payment_address=deposit.target_wallet_address,
         tx_hash=tx_hash,
         comment=deposit.comment,
         status=deposit.status,
@@ -481,6 +482,7 @@ def serialize_asset_deposit_create(
             if fixed_price_quote
             else None
         ),
+        payment_address=deposit.target_wallet_address,
         target_wallet_address=deposit.target_wallet_address,
         comment=deposit.comment,
         provider=deposit.provider,
@@ -897,12 +899,13 @@ def ensure_testnet_deposit_config() -> str:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Депозиты разрешены только в TON testnet",
         )
-    if not PROJECT_TON_WALLET:
+    payment_wallet_address = get_tdsd_payment_wallet_address()
+    if not payment_wallet_address:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="PROJECT_TON_WALLET не настроен на backend",
+            detail="Адрес приема оплаты временно не настроен",
         )
-    return parse_wallet_address_or_400(PROJECT_TON_WALLET)
+    return parse_wallet_address_or_400(payment_wallet_address)
 
 
 def build_deposit_comment(user_id: int, deposit_id: int) -> str:
@@ -1197,7 +1200,11 @@ def readiness(db: Session = Depends(get_db)) -> schemas.HealthResponse:
             )
     else:
         tdsd_asset = get_asset_by_symbol(db, TDSD_ASSET_SYMBOL)
-        if not tdsd_asset or not tdsd_asset.is_active or not PROJECT_TON_WALLET:
+        if (
+            not tdsd_asset
+            or not tdsd_asset.is_active
+            or not get_tdsd_payment_wallet_address()
+        ):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="TDSD fixed-price покупка не готова",
@@ -1355,7 +1362,11 @@ def disconnect_wallet(
     return serialize_user(current_user, db)
 
 
-@app.get("/fees/config", response_model=schemas.FeeConfigPublic)
+@app.get(
+    "/fees/config",
+    response_model=schemas.FeeConfigPublic,
+    response_model_exclude_none=True,
+)
 def fees_config() -> schemas.FeeConfigPublic:
     return schemas.FeeConfigPublic(
         buy_commission_percent=decimal_label(BUY_COMMISSION_PERCENT),
@@ -1367,7 +1378,8 @@ def fees_config() -> schemas.FeeConfigPublic:
         purchase_min_fee_ton="0",
         transfer_fee_percent=decimal_label(TRANSFER_COMMISSION_PERCENT),
         transfer_fee_asset_symbol=TDSD_ASSET_SYMBOL,
-        project_ton_wallet_address=PROJECT_TON_WALLET,
+        payment_address=get_tdsd_payment_wallet_address(),
+        project_ton_wallet_address=None,
         treasury_wallet_address=TREASURY_WALLET_ADDRESS,
         hot_wallet_address=HOT_WALLET_ADDRESS,
         tdsd_jetton_master_address=TDSD_JETTON_MASTER_ADDRESS,
@@ -2404,7 +2416,7 @@ def create_mock_ton_deposit(
         user_id=current_user.id,
         wallet_address=parse_wallet_address_or_400(wallet_address),
         target_wallet_address=parse_wallet_address_or_400(
-            PROJECT_TON_WALLET or wallet_address
+            get_tdsd_payment_wallet_address() or wallet_address
         ),
         network=TON_NETWORK,
         amount_ton=amount_decimal,

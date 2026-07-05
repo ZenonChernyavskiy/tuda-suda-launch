@@ -45,7 +45,7 @@ HOT_WALLET_JETTON_TRANSFER_GAS_TON = Decimal(
     os.getenv("HOT_WALLET_JETTON_TRANSFER_GAS_TON", "0.08")
 )
 TON_NETWORK = os.getenv("TON_NETWORK", "testnet")
-PROJECT_TON_WALLET = os.getenv("PROJECT_TON_WALLET", HOT_WALLET_ADDRESS).strip()
+PROJECT_TON_WALLET = os.getenv("PROJECT_TON_WALLET", "").strip()
 TONCENTER_API_URL = os.getenv(
     "TONCENTER_API_URL",
     "https://testnet.toncenter.com/api/v2",
@@ -87,6 +87,17 @@ raw_origins = os.getenv(
     "http://localhost:5173,http://127.0.0.1:5173",
 )
 CORS_ORIGINS = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+
+
+def get_tdsd_payment_wallet_address() -> str:
+    if HOT_WALLET_ADDRESS:
+        return HOT_WALLET_ADDRESS
+    if PROJECT_TON_WALLET:
+        logging.getLogger("tuda_suda.config").warning(
+            "PROJECT_TON_WALLET is deprecated; set HOT_WALLET_ADDRESS for TDSD payments"
+        )
+        return PROJECT_TON_WALLET
+    return ""
 
 
 def configure_logging() -> None:
@@ -144,9 +155,9 @@ def validate_production_settings() -> None:
     if TDSD_DECIMALS < 0 or TDSD_DECIMALS > 18:
         errors.append("TDSD_DECIMALS must be between 0 and 18")
     for env_name, value in (
-        ("PROJECT_TON_WALLET", PROJECT_TON_WALLET),
         ("TREASURY_WALLET_ADDRESS", TREASURY_WALLET_ADDRESS),
         ("HOT_WALLET_ADDRESS", HOT_WALLET_ADDRESS),
+        ("PROJECT_TON_WALLET", PROJECT_TON_WALLET),
         ("TDSD_JETTON_MASTER_ADDRESS", TDSD_JETTON_MASTER_ADDRESS),
         ("TDSD_PROJECT_JETTON_WALLET", TDSD_PROJECT_JETTON_WALLET),
     ):
@@ -162,7 +173,7 @@ def validate_production_settings() -> None:
         errors.append(
             "TDSD_JETTON_MASTER_ADDRESS and TDSD_PROJECT_JETTON_WALLET are required when TDSD_DEPOSITS_ENABLED=true"
         )
-    if not TDSD_DEPOSITS_ENABLED and not PROJECT_TON_WALLET:
-        errors.append("PROJECT_TON_WALLET is required when TDSD_DEPOSITS_ENABLED=false")
+    if not TDSD_DEPOSITS_ENABLED and not get_tdsd_payment_wallet_address():
+        errors.append("HOT_WALLET_ADDRESS is required when TDSD_DEPOSITS_ENABLED=false")
     if errors:
         raise RuntimeError("Invalid production settings: " + "; ".join(errors))

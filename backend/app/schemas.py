@@ -143,7 +143,8 @@ class FeeConfigPublic(BaseModel):
     purchase_min_fee_ton: str
     transfer_fee_percent: str
     transfer_fee_asset_symbol: str
-    project_ton_wallet_address: str
+    payment_address: str
+    project_ton_wallet_address: str | None = None
     treasury_wallet_address: str
     hot_wallet_address: str
     tdsd_jetton_master_address: str
@@ -266,6 +267,7 @@ class AssetDepositCreateResponse(BaseModel):
     payment_amount_nano: int | None = None
     payment_amount_ton: str | None = None
     fixed_price_ton: str | None = None
+    payment_address: str
     target_wallet_address: str
     comment: str
     provider: str
@@ -290,6 +292,7 @@ class AssetDepositPublic(BaseModel):
     payment_amount_nano: int | None = None
     payment_amount_ton: str | None = None
     fixed_price_ton: str | None = None
+    payment_address: str
     tx_hash: str | None
     comment: str | None
     status: Literal["pending", "confirmed", "failed"]

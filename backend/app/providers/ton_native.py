@@ -5,8 +5,8 @@ from .. import models
 from ..config import (
     MAX_DEPOSIT_TON,
     MIN_DEPOSIT_TON,
-    PROJECT_TON_WALLET,
     TON_NETWORK,
+    get_tdsd_payment_wallet_address,
 )
 from ..ton import TonAddressValidationError, normalize_ton_wallet_address
 from ..ton_service import TonCenterError, verify_deposit
@@ -49,8 +49,9 @@ class TonNativeProvider(AssetProvider):
             raise ProviderError("TonNativeProvider поддерживает только native TON")
         if asset.network != self.network or TON_NETWORK != "testnet":
             raise ProviderError("TON deposits в MVP разрешены только в testnet")
-        if not PROJECT_TON_WALLET:
-            raise ProviderError("PROJECT_TON_WALLET не настроен на backend")
+        payment_wallet_address = get_tdsd_payment_wallet_address()
+        if not payment_wallet_address:
+            raise ProviderError("Адрес приема оплаты временно не настроен")
 
         amount_units = int(amount_units)
         if amount_units <= 0:
@@ -64,7 +65,7 @@ class TonNativeProvider(AssetProvider):
             raise ProviderError(f"Максимальный депозит: {MAX_DEPOSIT_TON} TON")
 
         try:
-            target_wallet_address = normalize_ton_wallet_address(PROJECT_TON_WALLET)
+            target_wallet_address = normalize_ton_wallet_address(payment_wallet_address)
         except TonAddressValidationError as exc:
             raise ProviderError(str(exc)) from exc
 

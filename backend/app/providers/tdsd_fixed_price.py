@@ -1,7 +1,7 @@
 import secrets
 
 from .. import models
-from ..config import PROJECT_TON_WALLET, TDSD_ASSET_SYMBOL, TON_NETWORK
+from ..config import TDSD_ASSET_SYMBOL, TON_NETWORK, get_tdsd_payment_wallet_address
 from ..fee_service import calculate_tdsd_fixed_price_quote
 from ..ton import TonAddressValidationError, normalize_ton_wallet_address
 from ..ton_service import TonCenterError, verify_deposit as verify_ton_payment
@@ -40,12 +40,13 @@ class TdsdFixedPriceProvider(AssetProvider):
     ) -> DepositInstructions:
         if asset.symbol != TDSD_ASSET_SYMBOL:
             raise ProviderError("Покупка доступна только для TDSD")
-        if not PROJECT_TON_WALLET:
+        payment_wallet_address = get_tdsd_payment_wallet_address()
+        if not payment_wallet_address:
             raise ProviderError("Покупка TDSD временно недоступна")
 
         try:
             calculate_tdsd_fixed_price_quote(amount_units, asset.decimals)
-            target_wallet_address = normalize_ton_wallet_address(PROJECT_TON_WALLET)
+            target_wallet_address = normalize_ton_wallet_address(payment_wallet_address)
         except (ValueError, TonAddressValidationError) as exc:
             raise ProviderError(str(exc)) from exc
 
