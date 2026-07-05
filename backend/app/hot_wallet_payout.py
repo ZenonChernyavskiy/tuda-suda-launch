@@ -54,13 +54,21 @@ class _TonSdk:
 
 
 def _load_tonsdk() -> _TonSdk:
+    logger.info("Loading tonsdk for TDSD hot wallet payout")
     try:
         from tonsdk.boc import Cell
         from tonsdk.contract.wallet import WalletVersionEnum, Wallets
         from tonsdk.utils import Address, bytes_to_b64str
     except Exception as exc:
+        logger.exception(
+            "Failed to load tonsdk for TDSD hot wallet payout "
+            "exception_type=%s exception=%s",
+            type(exc).__name__,
+            str(exc),
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE) from exc
 
+    logger.info("tonsdk loaded for TDSD hot wallet payout")
     return _TonSdk(
         Address=Address,
         Cell=Cell,
@@ -71,11 +79,27 @@ def _load_tonsdk() -> _TonSdk:
 
 
 def _mnemonic_words() -> list[str]:
+    logger.info(
+        "Checking HOT_WALLET_MNEMONIC presence for TDSD hot wallet payout "
+        "hot_wallet_address=%s",
+        HOT_WALLET_ADDRESS,
+    )
     if not HOT_WALLET_MNEMONIC:
+        logger.error(
+            "HOT_WALLET_MNEMONIC is not configured for TDSD hot wallet payout "
+            "hot_wallet_address=%s",
+            HOT_WALLET_ADDRESS,
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE)
 
     words = HOT_WALLET_MNEMONIC.replace("\n", " ").split()
     if len(words) < 12:
+        logger.error(
+            "HOT_WALLET_MNEMONIC has invalid word count for TDSD hot wallet payout "
+            "hot_wallet_address=%s word_count=%s",
+            HOT_WALLET_ADDRESS,
+            len(words),
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE)
     return words
 
@@ -118,6 +142,10 @@ def _wallet_address_variants(wallet_address: object) -> set[str]:
 
 
 def _hot_wallet_contract(sdk: _TonSdk) -> object:
+    logger.info(
+        "Preparing hot wallet contract for TDSD payout hot_wallet_address=%s",
+        HOT_WALLET_ADDRESS,
+    )
     words = _mnemonic_words()
     try:
         wallet_data = sdk.Wallets.from_mnemonics(
@@ -132,15 +160,35 @@ def _hot_wallet_contract(sdk: _TonSdk) -> object:
             0,
         )
     except Exception as exc:
+        logger.exception(
+            "Failed to create hot wallet contract from mnemonic "
+            "hot_wallet_address=%s exception_type=%s exception=%s",
+            HOT_WALLET_ADDRESS,
+            type(exc).__name__,
+            str(exc),
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE) from exc
 
     wallet = wallet_data[3]
+    logger.info(
+        "Checking HOT_WALLET_ADDRESS against mnemonic-derived wallet "
+        "hot_wallet_address=%s",
+        HOT_WALLET_ADDRESS,
+    )
     configured_address = normalize_ton_wallet_address(HOT_WALLET_ADDRESS)
     generated_variants = _wallet_address_variants(wallet.address)
     configured_variants = get_address_forms(configured_address)
     if generated_variants.isdisjoint(configured_variants):
-        logger.error("HOT_WALLET_ADDRESS does not match HOT_WALLET_MNEMONIC wallet")
+        logger.error(
+            "HOT_WALLET_ADDRESS does not match HOT_WALLET_MNEMONIC wallet "
+            "hot_wallet_address=%s",
+            HOT_WALLET_ADDRESS,
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE)
+    logger.info(
+        "Hot wallet contract is ready for TDSD payout hot_wallet_address=%s",
+        HOT_WALLET_ADDRESS,
+    )
     return wallet
 
 
@@ -173,44 +221,138 @@ def _read_address_from_boc(sdk: _TonSdk, boc_base64: str) -> str:
         parsed = cell.begin_parse()
         address = parsed.read_msg_addr()
     except Exception as exc:
+        logger.exception(
+            "Failed to parse jetton wallet address from Toncenter BOC "
+            "exception_type=%s exception=%s",
+            type(exc).__name__,
+            str(exc),
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE) from exc
     return _address_to_string(address)
 
 
 def get_jetton_wallet_address(owner_wallet_address: str) -> str:
+    logger.info(
+        "Resolving TDSD jetton wallet address owner_wallet_address=%s "
+        "jetton_master_address=%s",
+        owner_wallet_address,
+        TDSD_JETTON_MASTER_ADDRESS,
+    )
     sdk = _load_tonsdk()
     try:
         master_address = normalize_ton_wallet_address(TDSD_JETTON_MASTER_ADDRESS)
         owner_address = normalize_ton_wallet_address(owner_wallet_address)
     except TonAddressValidationError as exc:
+        logger.exception(
+            "Invalid TON address while resolving TDSD jetton wallet "
+            "owner_wallet_address=%s jetton_master_address=%s exception_type=%s "
+            "exception=%s",
+            owner_wallet_address,
+            TDSD_JETTON_MASTER_ADDRESS,
+            type(exc).__name__,
+            str(exc),
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE) from exc
     stack = [["tvm.Slice", _address_stack_cell_b64(sdk, owner_address)]]
 
     try:
+        logger.info(
+            "Calling Toncenter get_wallet_address for TDSD jetton wallet "
+            "owner_wallet_address=%s jetton_master_address=%s",
+            owner_address,
+            master_address,
+        )
         result = run_get_method(master_address, "get_wallet_address", stack)
     except TonCenterError as exc:
+        logger.exception(
+            "Toncenter get_wallet_address failed for TDSD jetton wallet "
+            "owner_wallet_address=%s jetton_master_address=%s exception_type=%s "
+            "exception=%s",
+            owner_address,
+            master_address,
+            type(exc).__name__,
+            str(exc),
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE) from exc
 
     result_stack = result.get("stack") if isinstance(result, dict) else None
+    logger.info(
+        "Toncenter get_wallet_address response received for TDSD jetton wallet "
+        "owner_wallet_address=%s jetton_master_address=%s has_stack=%s "
+        "response=%s",
+        owner_address,
+        master_address,
+        bool(result_stack),
+        result,
+    )
     if not result_stack:
+        logger.error(
+            "Toncenter get_wallet_address returned empty stack for TDSD jetton wallet "
+            "owner_wallet_address=%s jetton_master_address=%s response_type=%s",
+            owner_address,
+            master_address,
+            type(result).__name__,
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE)
 
     boc_base64 = _stack_item_boc_base64(result_stack[0])
     if not boc_base64:
+        logger.error(
+            "Toncenter get_wallet_address stack has no BOC for TDSD jetton wallet "
+            "owner_wallet_address=%s jetton_master_address=%s",
+            owner_address,
+            master_address,
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE)
-    return normalize_ton_wallet_address(_read_address_from_boc(sdk, boc_base64))
+    jetton_wallet_address = normalize_ton_wallet_address(
+        _read_address_from_boc(sdk, boc_base64)
+    )
+    logger.info(
+        "Resolved TDSD jetton wallet address owner_wallet_address=%s "
+        "jetton_wallet_address=%s",
+        owner_address,
+        jetton_wallet_address,
+    )
+    return jetton_wallet_address
 
 
 def _hot_wallet_seqno() -> int:
     try:
+        logger.info(
+            "Requesting hot wallet seqno from Toncenter hot_wallet_address=%s",
+            HOT_WALLET_ADDRESS,
+        )
         info = get_wallet_information(HOT_WALLET_ADDRESS)
     except TonCenterError as exc:
+        logger.exception(
+            "Toncenter wallet information request failed for hot wallet "
+            "hot_wallet_address=%s exception_type=%s exception=%s",
+            HOT_WALLET_ADDRESS,
+            type(exc).__name__,
+            str(exc),
+        )
         raise HotWalletPayoutFailed(PUBLIC_SEND_FAILED_MESSAGE) from exc
 
     try:
-        return int(info.get("seqno") or 0)
+        seqno = int(info.get("seqno") or 0)
     except (TypeError, ValueError) as exc:
+        logger.exception(
+            "Could not parse hot wallet seqno from Toncenter response "
+            "hot_wallet_address=%s response=%s exception_type=%s exception=%s",
+            HOT_WALLET_ADDRESS,
+            info,
+            type(exc).__name__,
+            str(exc),
+        )
         raise HotWalletPayoutFailed(PUBLIC_SEND_FAILED_MESSAGE) from exc
+    logger.info(
+        "Received hot wallet seqno from Toncenter hot_wallet_address=%s seqno=%s "
+        "response=%s",
+        HOT_WALLET_ADDRESS,
+        seqno,
+        info,
+    )
+    return seqno
 
 
 def _build_jetton_transfer_body(
@@ -219,6 +361,14 @@ def _build_jetton_transfer_body(
     amount_units: int,
     query_id: int,
 ) -> object:
+    logger.info(
+        "Building TDSD jetton transfer payload hot_wallet_address=%s "
+        "recipient_wallet_address=%s amount_units=%s query_id=%s",
+        HOT_WALLET_ADDRESS,
+        recipient_wallet_address,
+        amount_units,
+        query_id,
+    )
     body = sdk.Cell()
     body.bits.write_uint(JETTON_TRANSFER_OP, 32)
     body.bits.write_uint(query_id, 64)
@@ -239,42 +389,185 @@ def send_tdsd_from_hot_wallet(
     purchase_id: int,
 ) -> HotWalletPayoutResult:
     amount_units = int(amount_units)
+    logger.info(
+        "Starting TDSD hot wallet payout purchase_id=%s hot_wallet_address=%s "
+        "recipient_wallet_address=%s amount_units=%s",
+        purchase_id,
+        HOT_WALLET_ADDRESS,
+        recipient_wallet_address,
+        amount_units,
+    )
     if amount_units <= 0:
+        logger.error(
+            "TDSD hot wallet payout amount is not positive purchase_id=%s "
+            "hot_wallet_address=%s recipient_wallet_address=%s amount_units=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+            recipient_wallet_address,
+            amount_units,
+        )
         raise HotWalletPayoutFailed(PUBLIC_SEND_FAILED_MESSAGE)
 
     sdk = _load_tonsdk()
     try:
+        logger.info(
+            "Validating payout addresses purchase_id=%s hot_wallet_address=%s "
+            "recipient_wallet_address=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+            recipient_wallet_address,
+        )
         recipient_wallet = normalize_ton_wallet_address(recipient_wallet_address)
         normalize_ton_wallet_address(HOT_WALLET_ADDRESS)
     except TonAddressValidationError as exc:
+        logger.exception(
+            "Invalid payout address for TDSD hot wallet payout purchase_id=%s "
+            "hot_wallet_address=%s recipient_wallet_address=%s exception_type=%s "
+            "exception=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+            recipient_wallet_address,
+            type(exc).__name__,
+            str(exc),
+        )
         raise HotWalletPayoutUnavailable(PUBLIC_UNAVAILABLE_MESSAGE) from exc
 
-    wallet = _hot_wallet_contract(sdk)
-    hot_jetton_wallet = get_jetton_wallet_address(HOT_WALLET_ADDRESS)
-    recipient_jetton_wallet = get_jetton_wallet_address(recipient_wallet)
-    query_id = (int(time.time()) << 32) + int(purchase_id)
-    payload = _build_jetton_transfer_body(
-        sdk=sdk,
-        recipient_wallet_address=recipient_wallet,
-        amount_units=amount_units,
-        query_id=query_id,
-    )
+    try:
+        wallet = _hot_wallet_contract(sdk)
+        logger.info(
+            "Resolving hot wallet TDSD jetton wallet purchase_id=%s "
+            "hot_wallet_address=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+        )
+        hot_jetton_wallet = get_jetton_wallet_address(HOT_WALLET_ADDRESS)
+        logger.info(
+            "Resolving recipient TDSD jetton wallet purchase_id=%s "
+            "recipient_wallet_address=%s",
+            purchase_id,
+            recipient_wallet,
+        )
+        recipient_jetton_wallet = get_jetton_wallet_address(recipient_wallet)
+        query_id = (int(time.time()) << 32) + int(purchase_id)
+        payload = _build_jetton_transfer_body(
+            sdk=sdk,
+            recipient_wallet_address=recipient_wallet,
+            amount_units=amount_units,
+            query_id=query_id,
+        )
+    except HotWalletPayoutUnavailable as exc:
+        logger.exception(
+            "TDSD hot wallet payout unavailable during preparation "
+            "purchase_id=%s hot_wallet_address=%s recipient_wallet_address=%s "
+            "amount_units=%s exception_type=%s exception=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+            recipient_wallet_address,
+            amount_units,
+            type(exc).__name__,
+            str(exc),
+        )
+        raise
+    except Exception as exc:
+        logger.exception(
+            "TDSD hot wallet payout preparation failed purchase_id=%s "
+            "hot_wallet_address=%s recipient_wallet_address=%s amount_units=%s "
+            "exception_type=%s exception=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+            recipient_wallet_address,
+            amount_units,
+            type(exc).__name__,
+            str(exc),
+        )
+        raise
 
     try:
+        seqno = _hot_wallet_seqno()
+        logger.info(
+            "Creating TDSD jetton transfer message purchase_id=%s "
+            "hot_wallet_address=%s hot_jetton_wallet_address=%s "
+            "recipient_wallet_address=%s recipient_jetton_wallet_address=%s "
+            "amount_units=%s query_id=%s seqno=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+            hot_jetton_wallet,
+            recipient_wallet,
+            recipient_jetton_wallet,
+            amount_units,
+            query_id,
+            seqno,
+        )
         message = wallet.create_transfer_message(
             to_addr=hot_jetton_wallet,
             amount=decimal_to_nano(HOT_WALLET_JETTON_TRANSFER_GAS_TON),
-            seqno=_hot_wallet_seqno(),
+            seqno=seqno,
             payload=payload,
         )["message"]
         message_hash = sdk.bytes_to_b64str(message.bytes_hash())
         boc_base64 = sdk.bytes_to_b64str(message.to_boc(False))
-        send_boc(boc_base64)
-    except HotWalletPayoutUnavailable:
+        logger.info(
+            "Sending TDSD hot wallet payout BOC purchase_id=%s "
+            "hot_wallet_address=%s recipient_wallet_address=%s amount_units=%s "
+            "message_hash=%s boc_base64_length=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+            recipient_wallet,
+            amount_units,
+            message_hash,
+            len(boc_base64),
+        )
+        send_result = send_boc(boc_base64)
+        logger.info(
+            "Toncenter send BOC response for TDSD hot wallet payout "
+            "purchase_id=%s hot_wallet_address=%s recipient_wallet_address=%s "
+            "amount_units=%s message_hash=%s response=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+            recipient_wallet,
+            amount_units,
+            message_hash,
+            send_result,
+        )
+    except HotWalletPayoutUnavailable as exc:
+        logger.exception(
+            "TDSD hot wallet payout unavailable during send purchase_id=%s "
+            "hot_wallet_address=%s recipient_wallet_address=%s amount_units=%s "
+            "exception_type=%s exception=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+            recipient_wallet_address,
+            amount_units,
+            type(exc).__name__,
+            str(exc),
+        )
         raise
     except Exception as exc:
+        logger.exception(
+            "TDSD hot wallet payout send failed purchase_id=%s "
+            "hot_wallet_address=%s recipient_wallet_address=%s amount_units=%s "
+            "exception_type=%s exception=%s",
+            purchase_id,
+            HOT_WALLET_ADDRESS,
+            recipient_wallet_address,
+            amount_units,
+            type(exc).__name__,
+            str(exc),
+        )
         raise HotWalletPayoutFailed(PUBLIC_SEND_FAILED_MESSAGE) from exc
 
+    logger.info(
+        "TDSD hot wallet payout sent purchase_id=%s hot_wallet_address=%s "
+        "recipient_wallet_address=%s amount_units=%s message_hash=%s "
+        "hot_jetton_wallet_address=%s recipient_jetton_wallet_address=%s",
+        purchase_id,
+        HOT_WALLET_ADDRESS,
+        recipient_wallet,
+        amount_units,
+        message_hash,
+        hot_jetton_wallet,
+        recipient_jetton_wallet,
+    )
     return HotWalletPayoutResult(
         tx_hash=message_hash,
         hot_jetton_wallet_address=hot_jetton_wallet,

@@ -989,6 +989,37 @@ def is_pending_payout_lock(tx_hash: str | None) -> bool:
     return bool(tx_hash and tx_hash.startswith("pending:"))
 
 
+def log_tdsd_payout_exception(
+    message: str,
+    exc: BaseException,
+    deposit: models.AssetDeposit,
+    payout_amount_units: int | None,
+) -> None:
+    exc_info = (type(exc), exc, exc.__traceback__)
+    try:
+        payout_amount_display = format_asset_units(
+            payout_amount_units,
+            deposit.asset.decimals,
+        )
+    except Exception:
+        payout_amount_display = None
+    logger.exception(
+        "%s purchase_id=%s payment_tx_hash=%s hot_wallet_address=%s "
+        "recipient_wallet_address=%s payout_amount_units=%s "
+        "payout_amount_display=%s exception_type=%s exception=%s",
+        message,
+        deposit.id,
+        deposit.tx_hash,
+        HOT_WALLET_ADDRESS,
+        deposit.wallet_address,
+        payout_amount_units,
+        payout_amount_display,
+        type(exc).__name__,
+        str(exc),
+        exc_info=exc_info,
+    )
+
+
 def ensure_tdsd_hot_wallet_payout(
     db: Session,
     deposit: models.AssetDeposit,
@@ -1023,9 +1054,14 @@ def ensure_tdsd_hot_wallet_payout(
     deposit.payout_sent_at = datetime.utcnow()
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        logger.warning("TDSD hot wallet payout lock failed for purchase #%s", deposit.id)
+        log_tdsd_payout_exception(
+            "TDSD hot wallet payout lock failed",
+            exc,
+            deposit,
+            payout_amount_units,
+        )
         return "Отправляем TDSD"
     db.refresh(deposit)
 
@@ -1035,23 +1071,33 @@ def ensure_tdsd_hot_wallet_payout(
             amount_units=payout_amount_units,
             purchase_id=deposit.id,
         )
-    except HotWalletPayoutUnavailable:
+    except HotWalletPayoutUnavailable as exc:
         deposit.payout_status = "failed"
         deposit.payout_failed_reason = PUBLIC_UNAVAILABLE_MESSAGE
         deposit.payout_tx_hash = None
         deposit.payout_sent_at = None
         db.commit()
         db.refresh(deposit)
-        logger.warning("TDSD hot wallet payout unavailable for purchase #%s", deposit.id)
+        log_tdsd_payout_exception(
+            "TDSD hot wallet payout unavailable",
+            exc,
+            deposit,
+            payout_amount_units,
+        )
         return PUBLIC_UNAVAILABLE_MESSAGE
-    except HotWalletPayoutFailed:
+    except HotWalletPayoutFailed as exc:
         deposit.payout_status = "failed"
         deposit.payout_failed_reason = PUBLIC_SEND_FAILED_MESSAGE
         deposit.payout_tx_hash = None
         deposit.payout_sent_at = None
         db.commit()
         db.refresh(deposit)
-        logger.warning("TDSD hot wallet payout failed for purchase #%s", deposit.id)
+        log_tdsd_payout_exception(
+            "TDSD hot wallet payout failed",
+            exc,
+            deposit,
+            payout_amount_units,
+        )
         return PUBLIC_SEND_FAILED_MESSAGE
 
     used_payout = db.scalar(
@@ -1067,7 +1113,17 @@ def ensure_tdsd_hot_wallet_payout(
         deposit.payout_sent_at = None
         db.commit()
         db.refresh(deposit)
-        logger.error("Duplicate TDSD payout tx hash for purchase #%s", deposit.id)
+        logger.error(
+            "Duplicate TDSD payout tx hash purchase_id=%s payment_tx_hash=%s "
+            "hot_wallet_address=%s recipient_wallet_address=%s "
+            "payout_amount_units=%s payout_tx_hash=%s",
+            deposit.id,
+            deposit.tx_hash,
+            HOT_WALLET_ADDRESS,
+            deposit.wallet_address,
+            payout_amount_units,
+            payout.tx_hash,
+        )
         return PUBLIC_SEND_FAILED_MESSAGE
 
     deposit.payout_status = "sent"
@@ -1076,9 +1132,14 @@ def ensure_tdsd_hot_wallet_payout(
     deposit.payout_sent_at = datetime.utcnow()
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        logger.error("Could not save TDSD payout tx hash for purchase #%s", deposit.id)
+        log_tdsd_payout_exception(
+            "Could not save TDSD payout tx hash",
+            exc,
+            deposit,
+            payout_amount_units,
+        )
         return PUBLIC_SEND_FAILED_MESSAGE
     db.refresh(deposit)
     return "TDSD отправлены"
@@ -1966,6 +2027,12 @@ def verify_asset_deposit(
                 deposit.payout_failed_reason = str(exc)[:500]
                 db.commit()
                 db.refresh(deposit)
+                log_tdsd_payout_exception(
+                    "TDSD payout amount calculation failed",
+                    exc,
+                    deposit,
+                    deposit.amount_units,
+                )
                 message = PUBLIC_SEND_FAILED_MESSAGE
         return asset_deposit_verify_response(
             deposit,
