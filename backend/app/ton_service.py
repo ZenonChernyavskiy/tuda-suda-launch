@@ -167,45 +167,8 @@ def get_wallet_information(address: str) -> dict[str, Any]:
 
 
 def send_boc(boc_base64: str) -> Any:
-    endpoint = f"{TONCENTER_API_URL}/sendBoc"
-    boc_length = len(boc_base64 or "")
-    logger.info(
-        "Calling Toncenter sendBoc endpoint=%s boc_length=%s has_api_key=%s",
-        endpoint,
-        boc_length,
-        bool(TONCENTER_API_KEY),
-    )
-    try:
-        payload = _toncenter_post_json("sendBoc", {"boc": boc_base64})
-    except TonCenterError as exc:
-        logger.exception(
-            "Toncenter sendBoc request failed endpoint=%s boc_length=%s "
-            "has_api_key=%s exception_type=%s exception=%s",
-            endpoint,
-            boc_length,
-            bool(TONCENTER_API_KEY),
-            type(exc).__name__,
-            str(exc),
-        )
-        raise
-
-    logger.info(
-        "Toncenter sendBoc response endpoint=%s boc_length=%s has_api_key=%s "
-        "response=%s",
-        endpoint,
-        boc_length,
-        bool(TONCENTER_API_KEY),
-        payload,
-    )
+    payload = _toncenter_post_json("sendBoc", {"boc": boc_base64})
     if not payload.get("ok"):
-        logger.error(
-            "Toncenter sendBoc returned error endpoint=%s boc_length=%s "
-            "has_api_key=%s response=%s",
-            endpoint,
-            boc_length,
-            bool(TONCENTER_API_KEY),
-            payload,
-        )
         raise TonCenterError(str(payload.get("error") or payload))
     return payload.get("result")
 
