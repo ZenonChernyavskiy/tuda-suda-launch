@@ -34,7 +34,7 @@
 - [ ] `VITE_APP_URL` указывает на HTTPS frontend.
 - [ ] `VITE_TONCONNECT_MANIFEST_URL` указывает на HTTPS manifest.
 - [ ] `VITE_ENABLE_MOCK_AUTH=false`.
-- [ ] `VITE_ENABLE_ADMIN=false`.
+- [ ] `ADMIN_API_KEY` не передается в frontend build и отсутствует в JS bundle.
 - [ ] `npm run build` проходит.
 - [ ] В production bundle нет прямого импорта `@ton/core`.
 - [ ] Белого экрана нет.

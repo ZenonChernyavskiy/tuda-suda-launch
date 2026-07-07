@@ -138,24 +138,27 @@ def run_get_method(address: str, method: str, stack: list[Any]) -> Any:
         )
         raise
 
+    result = payload.get("result") if isinstance(payload, dict) else None
     logger.info(
         "Toncenter runGetMethod response endpoint=%s address=%s method=%s "
-        "has_stack=%s response=%s",
+        "has_stack=%s ok=%s result_type=%s",
         endpoint,
         address,
         method,
         bool(stack),
-        payload,
+        bool(payload.get("ok")) if isinstance(payload, dict) else False,
+        type(result).__name__,
     )
     if not payload.get("ok"):
         logger.error(
             "Toncenter runGetMethod returned error endpoint=%s address=%s "
-            "method=%s has_stack=%s response=%s",
+            "method=%s has_stack=%s error=%s code=%s",
             endpoint,
             address,
             method,
             bool(stack),
-            payload,
+            payload.get("error"),
+            payload.get("code"),
         )
         raise TonCenterError(str(payload.get("error") or payload))
     return payload.get("result")

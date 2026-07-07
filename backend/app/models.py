@@ -298,6 +298,31 @@ class ReferralReward(Base):
     )
 
 
+class UserReveal(Base):
+    __tablename__ = "user_reveals"
+    __table_args__ = (
+        UniqueConstraint(
+            "viewer_user_id",
+            "context_type",
+            "context_id",
+            "target_role",
+            name="uq_user_reveal_viewer_context_target",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    viewer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    revealed_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    context_type: Mapped[str] = mapped_column(String(64), index=True)
+    context_id: Mapped[str] = mapped_column(String(64), index=True)
+    target_role: Mapped[str] = mapped_column(String(32), index=True)
+    price_units: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    viewer: Mapped[User] = relationship("User", foreign_keys=[viewer_user_id])
+    revealed_user: Mapped[User] = relationship("User", foreign_keys=[revealed_user_id])
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
 

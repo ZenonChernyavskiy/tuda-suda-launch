@@ -1,3 +1,6 @@
+.git
+.DS_Store
+__MACOSX
 node_modules
 dist
 package-lock 3.json
@@ -7,5 +10,6 @@ src/styles 2.css
 !.env.example
 .npm-cache
 coverage
-.DS_Store
 *.log
+__pycache__
+*.pyc

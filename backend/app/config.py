@@ -11,12 +11,12 @@ load_dotenv(BASE_DIR / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'tuda_suda.db'}")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-ALLOW_MOCK_AUTH = os.getenv("ALLOW_MOCK_AUTH", "true").lower() == "true"
-APP_ENV = os.getenv("APP_ENV", "development").lower()
+ALLOW_MOCK_AUTH = os.getenv("ALLOW_MOCK_AUTH", "false").lower() == "true"
+APP_ENV = os.getenv("APP_ENV", "production").strip().lower()
 IS_PRODUCTION = APP_ENV == "production"
 AUTO_INIT_DB = os.getenv("AUTO_INIT_DB", "false" if IS_PRODUCTION else "true").lower() == "true"
-AUTH_TOKEN_SECRET = os.getenv("AUTH_TOKEN_SECRET", "dev-secret-change-me")
-AUTH_TOKEN_TTL_HOURS = int(os.getenv("AUTH_TOKEN_TTL_HOURS", "720"))
+AUTH_TOKEN_SECRET = os.getenv("AUTH_TOKEN_SECRET", "")
+AUTH_TOKEN_TTL_HOURS = int(os.getenv("AUTH_TOKEN_TTL_HOURS", "24"))
 TELEGRAM_INIT_DATA_MAX_AGE_SECONDS = int(
     os.getenv("TELEGRAM_INIT_DATA_MAX_AGE_SECONDS", "86400")
 )
@@ -32,14 +32,8 @@ PURCHASE_FEE_PERCENT = Decimal(
 BUY_COMMISSION_PERCENT = PURCHASE_FEE_PERCENT
 TRANSFER_COMMISSION_PERCENT = Decimal(os.getenv("TRANSFER_COMMISSION_PERCENT", "10"))
 TDSD_FIXED_PRICE_TON = Decimal(os.getenv("TDSD_FIXED_PRICE_TON", "0.1"))
-TREASURY_WALLET_ADDRESS = os.getenv(
-    "TREASURY_WALLET_ADDRESS",
-    "UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6",
-).strip()
-HOT_WALLET_ADDRESS = os.getenv(
-    "HOT_WALLET_ADDRESS",
-    "UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo",
-).strip()
+TREASURY_WALLET_ADDRESS = os.getenv("TREASURY_WALLET_ADDRESS", "").strip()
+HOT_WALLET_ADDRESS = os.getenv("HOT_WALLET_ADDRESS", "").strip()
 HOT_WALLET_MNEMONIC = os.getenv("HOT_WALLET_MNEMONIC", "").strip()
 HOT_WALLET_JETTON_TRANSFER_GAS_TON = Decimal(
     os.getenv("HOT_WALLET_JETTON_TRANSFER_GAS_TON", "0.08")
@@ -65,10 +59,7 @@ TDSD_ASSET_SYMBOL = os.getenv("TDSD_ASSET_SYMBOL", "TDSD").strip().upper()
 TDSD_ASSET_NAME = os.getenv("TDSD_ASSET_NAME", "Tuda Suda Token").strip()
 TDSD_DECIMALS = int(os.getenv("TDSD_DECIMALS", "9"))
 TDSD_NETWORK = os.getenv("TDSD_NETWORK", "ton_testnet").strip()
-TDSD_JETTON_MASTER_ADDRESS = os.getenv(
-    "TDSD_JETTON_MASTER_ADDRESS",
-    "EQBZkfdol6WOj-GXByKLeRlo70ktYIQnTA5Hq_gT6KVYvY3n",
-).strip()
+TDSD_JETTON_MASTER_ADDRESS = os.getenv("TDSD_JETTON_MASTER_ADDRESS", "").strip()
 TDSD_PROJECT_JETTON_WALLET = os.getenv("TDSD_PROJECT_JETTON_WALLET", "").strip()
 TDSD_DEPOSITS_ENABLED = os.getenv("TDSD_DEPOSITS_ENABLED", "false").lower() == "true"
 SEED_TDSD_ASSET = os.getenv("SEED_TDSD_ASSET", "true").lower() == "true"
@@ -87,6 +78,23 @@ raw_origins = os.getenv(
     "http://localhost:5173,http://127.0.0.1:5173",
 )
 CORS_ORIGINS = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+
+
+INSECURE_SECRET_VALUES = {
+    "",
+    "change-me",
+    "changeme",
+    "dev-secret",
+    "dev-secret-change-me",
+    "change-me-for-local-demo",
+    "<long random secret>",
+    "<long random admin key>",
+    "<hot wallet mnemonic words>",
+}
+
+
+def is_insecure_secret(value: str | None) -> bool:
+    return (value or "").strip().lower() in INSECURE_SECRET_VALUES
 
 
 def get_tdsd_payment_wallet_address() -> str:
@@ -111,17 +119,28 @@ def validate_production_settings() -> None:
     errors: list[str] = []
     from .ton import TonAddressValidationError, normalize_ton_wallet_address
 
+    if APP_ENV not in {"production", "development", "test"}:
+        errors.append("APP_ENV must be production, development or test")
+    if AUTH_TOKEN_TTL_HOURS <= 0 or AUTH_TOKEN_TTL_HOURS > 72:
+        errors.append("AUTH_TOKEN_TTL_HOURS must be between 1 and 72")
+
     if IS_PRODUCTION:
         if DATABASE_URL.startswith("sqlite"):
             errors.append("DATABASE_URL must use PostgreSQL in production")
+        if "change-me" in DATABASE_URL.lower():
+            errors.append("DATABASE_URL must not contain change-me in production")
         if ALLOW_MOCK_AUTH:
             errors.append("ALLOW_MOCK_AUTH must be false in production")
-        if not TELEGRAM_BOT_TOKEN:
+        if is_insecure_secret(TELEGRAM_BOT_TOKEN):
             errors.append("TELEGRAM_BOT_TOKEN is required in production")
-        if AUTH_TOKEN_SECRET in {"", "dev-secret-change-me", "change-me-for-local-demo"}:
+        if is_insecure_secret(AUTH_TOKEN_SECRET) or len(AUTH_TOKEN_SECRET) < 32:
             errors.append("AUTH_TOKEN_SECRET must be changed in production")
-        if not ADMIN_API_KEY:
+        if is_insecure_secret(ADMIN_API_KEY) or len(ADMIN_API_KEY) < 24:
             errors.append("ADMIN_API_KEY is required in production")
+        if is_insecure_secret(HOT_WALLET_MNEMONIC):
+            errors.append("HOT_WALLET_MNEMONIC is required in production")
+        if not TDSD_JETTON_MASTER_ADDRESS:
+            errors.append("TDSD_JETTON_MASTER_ADDRESS is required in production")
         if not CORS_ORIGINS or "*" in CORS_ORIGINS:
             errors.append("CORS_ORIGINS must be explicit in production")
         if any(

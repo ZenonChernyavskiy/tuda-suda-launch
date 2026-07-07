@@ -209,13 +209,13 @@ PURCHASE_FEE_PERCENT=1
 BUY_COMMISSION_PERCENT=1
 TDSD_FIXED_PRICE_TON=0.1
 TRANSFER_COMMISSION_PERCENT=10
-TREASURY_WALLET_ADDRESS=UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6
-HOT_WALLET_ADDRESS=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo
+TREASURY_WALLET_ADDRESS=<treasury wallet public address>
+HOT_WALLET_ADDRESS=<hot wallet public address>
 HOT_WALLET_MNEMONIC=<hot wallet mnemonic words>
 HOT_WALLET_JETTON_TRANSFER_GAS_TON=0.08
 # Deprecated: use HOT_WALLET_ADDRESS instead.
 # PROJECT_TON_WALLET=
-TDSD_JETTON_MASTER_ADDRESS=EQBZkfdol6WOj-GXByKLeRlo70ktYIQnTA5Hq_gT6KVYvY3n
+TDSD_JETTON_MASTER_ADDRESS=<TDSD jetton master address>
 ```
 
 Фиксированная цена задается через `TDSD_FIXED_PRICE_TON`: сейчас `1 TDSD = 0.1 TON`. Если пользователь оплачивает 10 TON, gross-покупка составляет 100 TDSD. Комиссия платформы `PURCHASE_FEE_PERCENT` удерживается из TDSD перед зачислением и on-chain выплатой: при 1% пользователь получает 99 TDSD. `BUY_COMMISSION_PERCENT` оставлен как совместимый alias.
@@ -303,7 +303,6 @@ Alembic migration `202606270001_stage8_initial_schema.py` создает:
 - `VITE_APP_URL`
 - `VITE_TONCONNECT_MANIFEST_URL`
 - `VITE_ENABLE_MOCK_AUTH`
-- `VITE_ENABLE_ADMIN`
 
 Смотрите полный список в `.env.example` и `.env.production.example`.
 

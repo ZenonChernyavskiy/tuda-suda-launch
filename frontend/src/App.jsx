@@ -19,10 +19,6 @@ const IS_PRODUCTION = import.meta.env.PROD;
 const ENABLE_MOCK_AUTH =
   import.meta.env.VITE_ENABLE_MOCK_AUTH === "true" ||
   (!IS_PRODUCTION && import.meta.env.VITE_ENABLE_MOCK_AUTH !== "false");
-const ENABLE_ADMIN =
-  import.meta.env.VITE_ENABLE_ADMIN === "true" ||
-  (!IS_PRODUCTION && import.meta.env.VITE_ENABLE_ADMIN !== "false");
-
 const MENU = [
   { id: "home", label: "Главная" },
   { id: "all", label: "Все" },
@@ -68,17 +64,17 @@ const RANKS = [
   {
     name: "Меценат",
     condition: "карма от 200",
-    description: "Заметная активность и стабильные успешные операции.",
+    description: "Заметная активность и стабильное участие.",
   },
   {
     name: "Легенда",
     condition: "карма от 500",
-    description: "Высокий уровень доверия и вклада в сообщество.",
+    description: "Высокая активность и вклад в сообщество.",
   },
   {
     name: "Титан",
     condition: "карма от 1000",
-    description: "Максимальный уровень доверия и активности.",
+    description: "Максимальный уровень активности.",
   },
 ];
 
@@ -86,6 +82,11 @@ function displayName(user) {
   if (!user) return "Пользователь";
   if (user.username) return `@${user.username}`;
   return user.first_name || `ID ${user.telegram_id || user.id}`;
+}
+
+function revealTargetKey(target) {
+  if (!target) return "";
+  return `${target.context_type}:${target.context_id}:${target.target_role}`;
 }
 
 function shortenAddress(address) {
@@ -359,6 +360,10 @@ function transactionOperation(transaction) {
 function publicTransactionOperation(transaction) {
   const isFee = transaction.source_type === "fee";
   const isReferralReward = transaction.source_type === "referral_reward";
+  const revealTargets = [
+    transaction.sender_reveal,
+    transaction.receiver_reveal,
+  ].filter(Boolean);
   return {
     key: transaction.id,
     date: transaction.created_at,
@@ -385,10 +390,12 @@ function publicTransactionOperation(transaction) {
     direction: transaction.direction,
     directionRaw: "transfer",
     comment: transaction.comment,
+    revealTargets,
   };
 }
 
 function assetGiftOperation(gift) {
+  const revealTargets = gift.reveal_target ? [gift.reveal_target] : [];
   return {
     key: `asset-gift-${gift.id}`,
     date: gift.created_at,
@@ -400,6 +407,7 @@ function assetGiftOperation(gift) {
     direction: gift.type === "sent" ? "Списание" : "Зачисление",
     directionRaw: gift.type === "sent" ? "debit" : "credit",
     comment: gift.message,
+    revealTargets,
   };
 }
 
@@ -439,21 +447,6 @@ function isFeeLedgerEntry(entry) {
   );
 }
 
-function globalLedgerOperation(entry) {
-  return {
-    key: `global-${entry.id}`,
-    date: entry.created_at,
-    title: ledgerTypeLabel(entry.entry_type),
-    type: ledgerTypeLabel(entry.entry_type),
-    user: entry.username ? `@${entry.username}` : `User ${entry.user_id}`,
-    token: entry.asset_symbol,
-    amount: entry.amount_display,
-    direction: directionLabel(entry.direction),
-    directionRaw: entry.direction,
-    comment: entry.comment,
-  };
-}
-
 function newestFirst(items) {
   return [...items].sort((a, b) => new Date(b.date) - new Date(a.date));
 }
@@ -483,30 +476,23 @@ function ProfileInfoSheet({ type, user, onClose }) {
   if (!type) return null;
 
   const modal = {
-    reputation: {
-      title: "Репутация",
-      body: [
-        "Репутация показывает, насколько профилю можно доверять внутри Tuda Suda.",
-        "Она зависит от успешных операций, стабильной активности, корректного поведения и общей истории участия.",
-        "Высокая репутация повышает доверие к пользователю и помогает сообществу лучше понимать надежность профиля.",
-      ],
-    },
     karma: {
       title: "Карма",
       body: [
-        "Карма отражает полезную активность пользователя в проекте.",
-        "Она начисляется за активность, успешные переводы TDSD, участие в проекте, приглашение пользователей и корректное поведение.",
-        "Карма может снижаться за подозрительные действия, отмены, жалобы или нарушения. Повысить ее можно регулярным и честным участием.",
+        "Карма отражает активность пользователя в проекте.",
+        "Она начисляется за активность, переводы TDSD, участие в проекте и приглашение пользователей.",
       ],
     },
     rank: {
       title: "Ранг",
       body: [
-        "Ранг показывает текущий уровень активности и доверия профиля.",
+        "Ранг показывает текущий уровень активности профиля.",
         `Ваш текущий ранг: ${user.rank || "Новичок"}.`,
       ],
     },
   }[type];
+
+  if (!modal) return null;
 
   return (
     <div className="info-sheet-backdrop" onClick={onClose} role="presentation">
@@ -580,7 +566,13 @@ function TransactionList({ transactions, emptyText }) {
   );
 }
 
-function OperationList({ operations, emptyText, compact = false }) {
+function OperationList({
+  operations,
+  emptyText,
+  compact = false,
+  onRevealUser,
+  revealingKey = "",
+}) {
   if (!operations.length) {
     return <p className="empty">{emptyText}</p>;
   }
@@ -602,6 +594,24 @@ function OperationList({ operations, emptyText, compact = false }) {
               {item.type} · {item.token} · {item.direction}
             </p>
             {item.comment ? <p className="operation-comment">{item.comment}</p> : null}
+            {Boolean(item.revealTargets?.length) && onRevealUser ? (
+              <div className="reveal-actions">
+                {item.revealTargets.map((target) => {
+                  const key = revealTargetKey(target);
+                  return (
+                    <button
+                      className="reveal-button"
+                      disabled={revealingKey === key}
+                      key={key}
+                      onClick={() => onRevealUser(target)}
+                      type="button"
+                    >
+                      {revealingKey === key ? "Раскрываем..." : target.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
           <b
             className={
@@ -646,6 +656,8 @@ function HomeScreen({
   assetBalances,
   recentOperations,
   sendProps,
+  onRevealUser,
+  revealingKey,
 }) {
   const [giftOpen, setGiftOpen] = useState(false);
   const user = dashboard.user;
@@ -708,6 +720,8 @@ function HomeScreen({
           compact
           operations={recentOperations}
           emptyText="Пока тихо. Первый подарок задаст тон."
+          onRevealUser={onRevealUser}
+          revealingKey={revealingKey}
         />
       </section>
     </main>
@@ -845,7 +859,7 @@ function HistoryScreen({ transactions, assetGifts }) {
   );
 }
 
-function LeaderboardScreen({ leaderboard }) {
+function LeaderboardScreen({ leaderboard, onRevealUser, revealingKey = "" }) {
   const [activeTab, setActiveTab] = useState("karma");
   const currentTab = LEADERBOARD_TABS.find((tab) => tab.id === activeTab);
   const rows = leaderboard?.[activeTab] || [];
@@ -878,6 +892,18 @@ function LeaderboardScreen({ leaderboard }) {
                 <div>
                   <strong>{displayName(user)}</strong>
                   <small>{user.rank}</small>
+                  {user.reveal_target && onRevealUser ? (
+                    <button
+                      className="reveal-button inline"
+                      disabled={revealingKey === revealTargetKey(user.reveal_target)}
+                      onClick={() => onRevealUser(user.reveal_target)}
+                      type="button"
+                    >
+                      {revealingKey === revealTargetKey(user.reveal_target)
+                        ? "Раскрываем..."
+                        : user.reveal_target.label}
+                    </button>
+                  ) : null}
                 </div>
                 <b>{user[currentTab.value]}</b>
               </article>
@@ -1184,6 +1210,8 @@ function AssetsScreen({
   balances,
   ledger,
   giftLeaderboard,
+  onRevealUser,
+  revealingKey = "",
 }) {
   const visibleAssets = userAssets(assets);
   const visibleBalances = userAssets(balances);
@@ -1270,6 +1298,18 @@ function AssetsScreen({
                     <div>
                       <strong>{displayName(user)}</strong>
                       <small>{user.amount_display} {giftLeaderboard.symbol}</small>
+                      {user.reveal_target && onRevealUser ? (
+                        <button
+                          className="reveal-button inline"
+                          disabled={revealingKey === revealTargetKey(user.reveal_target)}
+                          onClick={() => onRevealUser(user.reveal_target)}
+                          type="button"
+                        >
+                          {revealingKey === revealTargetKey(user.reveal_target)
+                            ? "Раскрываем..."
+                            : user.reveal_target.label}
+                        </button>
+                      ) : null}
                     </div>
                     <b>{user.amount_display}</b>
                   </article>
@@ -1289,6 +1329,18 @@ function AssetsScreen({
                     <div>
                       <strong>{displayName(user)}</strong>
                       <small>{user.amount_display} {giftLeaderboard.symbol}</small>
+                      {user.reveal_target && onRevealUser ? (
+                        <button
+                          className="reveal-button inline"
+                          disabled={revealingKey === revealTargetKey(user.reveal_target)}
+                          onClick={() => onRevealUser(user.reveal_target)}
+                          type="button"
+                        >
+                          {revealingKey === revealTargetKey(user.reveal_target)
+                            ? "Раскрываем..."
+                            : user.reveal_target.label}
+                        </button>
+                      ) : null}
                     </div>
                     <b>{user.amount_display}</b>
                   </article>
@@ -1305,6 +1357,8 @@ function AssetsScreen({
 function AllTransactionsScreen({
   publicTransactions,
   loading,
+  onRevealUser,
+  revealingKey,
 }) {
   const operations = newestFirst(
     publicTransactions.map(publicTransactionOperation),
@@ -1325,6 +1379,8 @@ function AllTransactionsScreen({
         <OperationList
           operations={operations}
           emptyText="Пока нет операций для отображения."
+          onRevealUser={onRevealUser}
+          revealingKey={revealingKey}
         />
       </section>
     </main>
@@ -1520,24 +1576,12 @@ function ProfileScreen({
           )}
         </span>
         <h2>{displayName(user)}</h2>
-        <p>
-          {telegramMode
-            ? "Telegram Mini App"
-            : mockAllowed
-              ? "Локальный mock mode"
-              : "Ожидает Telegram Mini App"}
-        </p>
+        <p>ID: {user.telegram_id}</p>
       </section>
 
       <section className="stats-grid">
-        <Stat label="Telegram ID" value={user.telegram_id} />
         <Stat label="Ранг" onClick={() => setProfileInfo("rank")} value={user.rank} />
         <Stat label="Карма" onClick={() => setProfileInfo("karma")} value={user.karma} />
-        <Stat
-          label="Репутация"
-          onClick={() => setProfileInfo("reputation")}
-          value={user.reputation ?? 0}
-        />
         <Stat label="TDSD" value={primaryBalance(userAssets(assetBalances))?.balance_display || "0"} />
       </section>
 
@@ -1693,10 +1737,8 @@ export default function App() {
   const [tonDeposits, setTonDeposits] = useState([]);
   const [tonBalanceNano, setTonBalanceNano] = useState("0");
   const [assets, setAssets] = useState([]);
-  const [adminAssets, setAdminAssets] = useState([]);
   const [assetBalances, setAssetBalances] = useState([]);
   const [assetLedger, setAssetLedger] = useState([]);
-  const [globalLedger, setGlobalLedger] = useState([]);
   const [assetGifts, setAssetGifts] = useState([]);
   const [assetGiftFeed, setAssetGiftFeed] = useState([]);
   const [publicTransactions, setPublicTransactions] = useState([]);
@@ -1713,9 +1755,9 @@ export default function App() {
   const [depositLoading, setDepositLoading] = useState(false);
   const [paying, setPaying] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [globalLedgerLoading, setGlobalLedgerLoading] = useState(false);
   const [publicTransactionsLoading, setPublicTransactionsLoading] = useState(false);
   const [referralsLoading, setReferralsLoading] = useState(false);
+  const [revealingKey, setRevealingKey] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const telegramMode = useMemo(() => isTelegramMode(), [dashboard]);
@@ -1839,9 +1881,7 @@ export default function App() {
       giftLeaderboardRows,
     ] =
       await Promise.all(commonRequests);
-    const adminAssetRows = ENABLE_ADMIN ? await api.getAdminAssets() : assetRows;
     setAssets(assetRows);
-    setAdminAssets(adminAssetRows);
     setAssetBalances(balanceRows);
     setAssetLedger(
       ledgerRows.filter(
@@ -1851,29 +1891,6 @@ export default function App() {
     setAssetGifts(giftRows.filter((gift) => gift.symbol === USER_ASSET_SYMBOL));
     setAssetGiftFeed(giftFeedRows.filter((gift) => gift.symbol === USER_ASSET_SYMBOL));
     setAssetGiftLeaderboard(giftLeaderboardRows);
-  }
-
-  async function loadGlobalLedger(filters = { limit: 100, offset: 0 }) {
-    if (!ENABLE_ADMIN) {
-      setGlobalLedger([]);
-      return;
-    }
-    setGlobalLedgerLoading(true);
-    try {
-      const data = await api.getGlobalLedger(filters);
-      setGlobalLedger(data);
-    } finally {
-      setGlobalLedgerLoading(false);
-    }
-  }
-
-  async function handleLoadGlobalLedger(filters) {
-    setError("");
-    try {
-      await loadGlobalLedger(filters);
-    } catch (err) {
-      setError(err.message);
-    }
   }
 
   async function authenticate(mockUser = null) {
@@ -1893,7 +1910,7 @@ export default function App() {
           referralParam,
         };
       } else {
-        throw new Error("Откройте приложение внутри Telegram Mini App");
+        throw new Error("Откройте приложение внутри Telegram");
       }
       const auth = await api.authTelegram(payload);
       setAccessToken(auth.access_token);
@@ -2169,6 +2186,32 @@ export default function App() {
     }
   }
 
+  async function handleRevealUser(target) {
+    if (!target) return;
+    const key = revealTargetKey(target);
+    setRevealingKey(key);
+    setError("");
+    setSuccess("");
+    try {
+      const result = await api.revealUser(target);
+      setSuccess(
+        result.charged
+          ? `Пользователь раскрыт за ${result.price_display} TDSD`
+          : "Пользователь уже раскрыт",
+      );
+      await Promise.all([
+        loadDashboard(),
+        loadPublicTransactions(),
+        loadAssetData(),
+        loadLeaderboard(),
+      ]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRevealingKey("");
+    }
+  }
+
   useEffect(() => {
     authenticate();
   }, []);
@@ -2226,7 +2269,9 @@ export default function App() {
         <HomeScreen
           assetBalances={assetBalances}
           dashboard={dashboard}
+          onRevealUser={handleRevealUser}
           recentOperations={recentOperations}
+          revealingKey={revealingKey}
           sendProps={sendProps}
           tonAddress={homeTonAddress}
         />
@@ -2234,7 +2279,9 @@ export default function App() {
       {dashboard && activeTab === "all" ? (
         <AllTransactionsScreen
           loading={publicTransactionsLoading}
+          onRevealUser={handleRevealUser}
           publicTransactions={publicTransactions}
+          revealingKey={revealingKey}
         />
       ) : null}
       {dashboard && activeTab === "referrals" ? (

@@ -80,12 +80,31 @@ class TransactionPublic(BaseModel):
     type: Literal["sent", "received"]
 
 
+class UserRevealTargetPublic(BaseModel):
+    context_type: str
+    context_id: str
+    target_role: str
+    price_units: int
+    price_display: str
+    label: str = "Раскрыть пользователя"
+
+
+class UserRevealRequest(BaseModel):
+    context_type: str = Field(min_length=1, max_length=64)
+    context_id: str = Field(min_length=1, max_length=64)
+    target_role: str = Field(min_length=1, max_length=32)
+
+
 class PublicTransactionFeedItem(BaseModel):
     id: str
     source_type: Literal["virtual_gift", "asset_gift", "fee", "referral_reward"]
     created_at: datetime
     sender: str
     receiver: str
+    sender_revealed: bool = False
+    receiver_revealed: bool = False
+    sender_reveal: UserRevealTargetPublic | None = None
+    receiver_reveal: UserRevealTargetPublic | None = None
     token: str
     amount: str
     direction: str
@@ -107,6 +126,7 @@ class LeaderboardUser(BaseModel):
     id: int
     username: str | None
     first_name: str | None
+    reveal_target: UserRevealTargetPublic | None = None
     karma: int
     total_sent: int
     total_received: int
@@ -369,6 +389,18 @@ class AssetBalancePublic(BaseModel):
     balance_display: str
 
 
+class UserRevealResponse(BaseModel):
+    display_name: str
+    revealed_user_id: int
+    context_type: str
+    context_id: str
+    target_role: str
+    price_units: int
+    price_display: str
+    charged: bool
+    balance: AssetBalancePublic
+
+
 class AssetDepositVerifyResponse(BaseModel):
     deposit: AssetDepositPublic
     asset_balance: AssetBalancePublic | None = None
@@ -393,6 +425,7 @@ class AssetLedgerEntryPublic(BaseModel):
         "referral_reward",
         "referral_reward_pending",
         "referral_reward_credit",
+        "user_reveal",
     ]
     amount_units: int
     amount_display: str
@@ -517,6 +550,8 @@ class AssetGiftPublic(BaseModel):
     message: str | None
     status: Literal["completed", "failed", "cancelled"]
     counterparty_display_name: str
+    counterparty_revealed: bool = False
+    reveal_target: UserRevealTargetPublic | None = None
     created_at: datetime
 
 
@@ -540,6 +575,7 @@ class AssetGiftLeaderboardUser(BaseModel):
     id: int
     username: str | None
     first_name: str | None
+    reveal_target: UserRevealTargetPublic | None = None
     amount_units: int
     amount_display: str
 

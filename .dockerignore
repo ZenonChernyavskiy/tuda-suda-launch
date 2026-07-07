@@ -2,12 +2,12 @@
 .DS_Store
 __MACOSX
 node_modules
-.venv
 __pycache__
 *.pyc
 *.pyo
 *.pyd
 .Python
+.venv
 .env
 .env.*
 !.env.example
@@ -18,4 +18,9 @@ __pycache__
 *.log
 .pytest_cache
 .mypy_cache
-alembic/__pycache__
+frontend/dist
+frontend/node_modules
+backend/__pycache__
+backend/.venv
+backend/tuda_suda.db
+contracts/node_modules

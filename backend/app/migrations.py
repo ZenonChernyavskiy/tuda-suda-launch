@@ -24,6 +24,7 @@ def init_db() -> None:
     ensure_asset_economy()
     ensure_asset_gift_columns()
     ensure_asset_deposit_columns()
+    ensure_user_reveal_schema()
 
 
 def ensure_user_wallet_columns() -> None:
@@ -228,6 +229,51 @@ def ensure_referral_schema() -> None:
             text(
                 "CREATE INDEX IF NOT EXISTS ix_referral_rewards_created_at "
                 "ON referral_rewards(created_at)"
+            )
+        )
+
+
+def ensure_user_reveal_schema() -> None:
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS user_reveals ("
+                "id INTEGER PRIMARY KEY, "
+                "viewer_user_id INTEGER NOT NULL, "
+                "revealed_user_id INTEGER NOT NULL, "
+                "context_type VARCHAR(64) NOT NULL, "
+                "context_id VARCHAR(64) NOT NULL, "
+                "target_role VARCHAR(32) NOT NULL, "
+                "price_units BIGINT NOT NULL, "
+                "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                "FOREIGN KEY(viewer_user_id) REFERENCES users(id), "
+                "FOREIGN KEY(revealed_user_id) REFERENCES users(id), "
+                "UNIQUE(viewer_user_id, context_type, context_id, target_role)"
+                ")"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_user_reveals_viewer_user_id "
+                "ON user_reveals(viewer_user_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_user_reveals_revealed_user_id "
+                "ON user_reveals(revealed_user_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_user_reveals_context "
+                "ON user_reveals(context_type, context_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_user_reveals_created_at "
+                "ON user_reveals(created_at)"
             )
         )
 

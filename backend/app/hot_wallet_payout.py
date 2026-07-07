@@ -279,11 +279,12 @@ def get_jetton_wallet_address(owner_wallet_address: str) -> str:
     logger.info(
         "Toncenter get_wallet_address response received for TDSD jetton wallet "
         "owner_wallet_address=%s jetton_master_address=%s has_stack=%s "
-        "response=%s",
+        "stack_length=%s result_type=%s",
         owner_address,
         master_address,
         bool(result_stack),
-        result,
+        len(result_stack) if isinstance(result_stack, list) else 0,
+        type(result).__name__,
     )
     if not result_stack:
         logger.error(
@@ -338,19 +339,19 @@ def _hot_wallet_seqno() -> int:
     except (TypeError, ValueError) as exc:
         logger.exception(
             "Could not parse hot wallet seqno from Toncenter response "
-            "hot_wallet_address=%s response=%s exception_type=%s exception=%s",
+            "hot_wallet_address=%s response_keys=%s exception_type=%s exception=%s",
             HOT_WALLET_ADDRESS,
-            info,
+            sorted(info.keys()) if isinstance(info, dict) else [],
             type(exc).__name__,
             str(exc),
         )
         raise HotWalletPayoutFailed(PUBLIC_SEND_FAILED_MESSAGE) from exc
     logger.info(
         "Received hot wallet seqno from Toncenter hot_wallet_address=%s seqno=%s "
-        "response=%s",
+        "response_keys=%s",
         HOT_WALLET_ADDRESS,
         seqno,
-        info,
+        sorted(info.keys()) if isinstance(info, dict) else [],
     )
     return seqno
 
@@ -507,9 +508,9 @@ def send_tdsd_from_hot_wallet(
         message_hash = sdk.bytes_to_b64str(message.bytes_hash())
         boc_base64 = sdk.bytes_to_b64str(message.to_boc(False))
         logger.info(
-            "Sending TDSD hot wallet payout BOC purchase_id=%s "
+            "Sending TDSD hot wallet payout message purchase_id=%s "
             "hot_wallet_address=%s recipient_wallet_address=%s amount_units=%s "
-            "message_hash=%s boc_base64_length=%s",
+            "message_hash=%s message_size=%s",
             purchase_id,
             HOT_WALLET_ADDRESS,
             recipient_wallet,
@@ -521,13 +522,14 @@ def send_tdsd_from_hot_wallet(
         logger.info(
             "Toncenter send BOC response for TDSD hot wallet payout "
             "purchase_id=%s hot_wallet_address=%s recipient_wallet_address=%s "
-            "amount_units=%s message_hash=%s response=%s",
+            "amount_units=%s message_hash=%s result_type=%s accepted=%s",
             purchase_id,
             HOT_WALLET_ADDRESS,
             recipient_wallet,
             amount_units,
             message_hash,
-            send_result,
+            type(send_result).__name__,
+            send_result is not None,
         )
     except HotWalletPayoutUnavailable as exc:
         logger.exception(

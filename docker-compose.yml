@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-tuda_suda}
       POSTGRES_USER: ${POSTGRES_USER:-tuda_suda}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,7 +24,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
       interval: 20s
@@ -39,8 +39,6 @@ services:
         VITE_APP_URL: ${VITE_APP_URL:-https://app.tudasuda.tech}
         VITE_TONCONNECT_MANIFEST_URL: ${VITE_TONCONNECT_MANIFEST_URL:-https://app.tudasuda.tech/tonconnect-manifest.json}
         VITE_ENABLE_MOCK_AUTH: ${VITE_ENABLE_MOCK_AUTH:-false}
-        VITE_ENABLE_ADMIN: ${VITE_ENABLE_ADMIN:-false}
-        VITE_ADMIN_API_KEY: ${VITE_ADMIN_API_KEY:-}
     restart: unless-stopped
     ports:
       - "8080:80"

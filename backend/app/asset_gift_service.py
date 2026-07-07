@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import desc, func, not_, select
+from sqlalchemy import desc, func, not_, select, update
 from sqlalchemy.orm import Session
 
 from . import models
@@ -55,14 +55,25 @@ def debit_asset_balance(
         )
 
     balance = get_or_create_asset_balance(db, user.id, asset.id)
-    if int(balance.balance_units or 0) < amount_units:
+    result = db.execute(
+        update(models.AssetBalance)
+        .where(
+            models.AssetBalance.id == balance.id,
+            models.AssetBalance.balance_units >= amount_units,
+        )
+        .values(
+            balance_units=models.AssetBalance.balance_units - amount_units,
+            updated_at=datetime.utcnow(),
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Недостаточно средств",
+            detail="Недостаточно TDSD",
         )
 
-    balance.balance_units = int(balance.balance_units or 0) - amount_units
-    balance.updated_at = datetime.utcnow()
+    db.refresh(balance)
     db.add(
         models.AssetLedgerEntry(
             user_id=user.id,

@@ -1,5 +1,4 @@
 const API_URL = import.meta.env.VITE_API_URL || "";
-const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || "";
 
 if (!API_URL && import.meta.env.PROD) {
   throw new Error("VITE_API_URL is required for production build");
@@ -24,10 +23,6 @@ async function request(path, options = {}) {
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
-  if (ADMIN_API_KEY && path.startsWith("/admin")) {
-    headers["X-Admin-Token"] = ADMIN_API_KEY;
-  }
-
   const response = await fetch(`${API_URL || "http://localhost:8000"}${path}`, {
     ...options,
     headers,
@@ -66,6 +61,12 @@ export const api = {
   },
   getPublicTransactions() {
     return request("/transactions/public");
+  },
+  revealUser(payload) {
+    return request("/users/reveal", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   getReferrals() {
     return request("/referrals/me");
@@ -136,15 +137,6 @@ export const api = {
   getAssets() {
     return request("/assets");
   },
-  getAdminAssets() {
-    return request("/admin/assets");
-  },
-  createAdminAsset(payload) {
-    return request("/admin/assets/create", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-  },
   getAssetBalances() {
     return request("/assets/balances");
   },
@@ -168,15 +160,5 @@ export const api = {
   },
   getAssetGiftLeaderboard(symbol = "TDSD") {
     return request(`/asset-gifts/leaderboard?symbol=${encodeURIComponent(symbol)}`);
-  },
-  getGlobalLedger(filters = {}) {
-    const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && String(value).trim() !== "") {
-        params.set(key, String(value).trim());
-      }
-    });
-    const query = params.toString();
-    return request(`/admin/ledger/all${query ? `?${query}` : ""}`);
   },
 };

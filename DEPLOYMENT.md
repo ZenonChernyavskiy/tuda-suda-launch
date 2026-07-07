@@ -48,6 +48,7 @@ DATABASE_URL=postgresql+psycopg://tuda_suda:<password>@postgres:5432/tuda_suda
 TELEGRAM_BOT_TOKEN=<bot token>
 ALLOW_MOCK_AUTH=false
 AUTH_TOKEN_SECRET=<long random secret>
+AUTH_TOKEN_TTL_HOURS=24
 ADMIN_API_KEY=<long random admin key>
 CORS_ORIGINS=https://app.tudasuda.tech
 PUBLIC_APP_URL=https://app.tudasuda.tech
@@ -56,13 +57,12 @@ VITE_API_URL=https://api.tudasuda.tech
 VITE_APP_URL=https://app.tudasuda.tech
 VITE_TONCONNECT_MANIFEST_URL=https://app.tudasuda.tech/tonconnect-manifest.json
 VITE_ENABLE_MOCK_AUTH=false
-VITE_ENABLE_ADMIN=false
 ```
 
 Для TON testnet deposits:
 
 ```env
-HOT_WALLET_ADDRESS=UQCaKtJZrSwLgcYwGYSG9Qijyn73oRdXIinxx-zBQ752TXxo
+HOT_WALLET_ADDRESS=<hot wallet public address>
 HOT_WALLET_MNEMONIC=<hot wallet mnemonic words>
 HOT_WALLET_JETTON_TRANSFER_GAS_TON=0.08
 # Deprecated: use HOT_WALLET_ADDRESS instead.
@@ -77,7 +77,7 @@ PURCHASE_FEE_PERCENT=1
 BUY_COMMISSION_PERCENT=1
 TDSD_FIXED_PRICE_TON=0.1
 TRANSFER_COMMISSION_PERCENT=10
-TREASURY_WALLET_ADDRESS=UQAOgQnt-ZMtAsMWtnL9zFs1Id27b8L3gc35pvQZA4dmUZg6
+TREASURY_WALLET_ADDRESS=<treasury wallet public address>
 ```
 
 `TDSD_FIXED_PRICE_TON=0.1` задает фиксированную цену `1 TDSD = 0.1 TON`. `PURCHASE_FEE_PERCENT=1` удерживает 1% из gross-суммы TDSD перед финальным зачислением на внутренний баланс и перед on-chain выплатой с hot wallet. `BUY_COMMISSION_PERCENT` оставлен как совместимый alias. `TRANSFER_COMMISSION_PERCENT=10` удерживает 10% из суммы TDSD-дара: отправитель списывает полную сумму, получатель получает 90%, treasury получает 10%.
@@ -89,7 +89,7 @@ Hot wallet должен совпадать с `HOT_WALLET_ADDRESS`, иметь �
 Для TDSD после deploy Jetton:
 
 ```env
-TDSD_JETTON_MASTER_ADDRESS=EQBZkfdol6WOj-GXByKLeRlo70ktYIQnTA5Hq_gT6KVYvY3n
+TDSD_JETTON_MASTER_ADDRESS=<TDSD jetton master address>
 TDSD_PROJECT_JETTON_WALLET=<Project Jetton Wallet>
 TDSD_DEPOSITS_ENABLED=true
 ```
@@ -265,7 +265,7 @@ Admin endpoints требуют header:
 X-Admin-Token: <ADMIN_API_KEY>
 ```
 
-Не включайте `VITE_ENABLE_ADMIN=true` в публичном frontend build.
+Не передавайте `ADMIN_API_KEY` в frontend build. Admin API вызывается только backend-side или через защищенный backend-доступ с header `X-Admin-Token`.
 
 ## 11. Rollback
 

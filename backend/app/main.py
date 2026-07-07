@@ -4,17 +4,22 @@ import hmac
 import json
 import logging
 import secrets
+import time
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import desc, func, not_, or_, select
+from sqlalchemy import desc, func, not_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import models, schemas
-from .asset_gift_service import get_or_create_treasury_user, send_random_asset_gift
+from .asset_gift_service import (
+    debit_asset_balance,
+    get_or_create_treasury_user,
+    send_random_asset_gift,
+)
 from .config import (
     ALLOW_MOCK_AUTH,
     ADMIN_API_KEY,
@@ -83,6 +88,16 @@ if AUTO_INIT_DB:
 app = FastAPI(title="Туда-Сюда API", version=APP_VERSION)
 NANO_PER_TON = 1_000_000_000
 TON_ASSET_SYMBOL = "TON"
+HIDDEN_USER_DISPLAY_NAME = "Скрытый пользователь"
+HIDDEN_RECEIVER_DISPLAY_NAME = "Получатель скрыт"
+USER_REVEAL_PRICE_TDSD = 10
+RATE_LIMITS: dict[str, tuple[int, int]] = {
+    "auth": (10, 60),
+    "verify_deposit": (20, 60),
+    "user_reveal": (20, 60),
+    "asset_gift_send": (10, 60),
+}
+_RATE_LIMIT_BUCKETS: dict[tuple[str, str], list[float]] = {}
 
 app.add_middleware(
     CORSMiddleware,
@@ -91,6 +106,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def rate_limit_key(request: Request, user: models.User | None = None) -> str:
+    if user is not None:
+        return f"user:{user.id}"
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        return f"ip:{forwarded_for.split(',', 1)[0].strip() or 'unknown'}"
+    client_host = request.client.host if request.client else "unknown"
+    return f"ip:{client_host}"
+
+
+def enforce_rate_limit(scope: str, key: str) -> None:
+    limit, window_seconds = RATE_LIMITS[scope]
+    now = time.time()
+    bucket_key = (scope, key)
+    recent_hits = [
+        hit for hit in _RATE_LIMIT_BUCKETS.get(bucket_key, [])
+        if now - hit < window_seconds
+    ]
+    if len(recent_hits) >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Слишком много запросов. Попробуйте позже.",
+        )
+    recent_hits.append(now)
+    _RATE_LIMIT_BUCKETS[bucket_key] = recent_hits
 
 
 @app.exception_handler(Exception)
@@ -241,7 +283,7 @@ def credit_asset_balance(
     if amount_units <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Сумма asset operation должна быть больше нуля",
+            detail="Сумма операции должна быть больше нуля",
         )
 
     balance = get_or_create_asset_balance(db, user.id, asset.id)
@@ -336,8 +378,34 @@ def add_reputation_event(
 def serialize_leaderboard_user(user: models.User) -> schemas.LeaderboardUser:
     return schemas.LeaderboardUser(
         id=user.id,
-        username=user.username,
-        first_name=user.first_name,
+        username=None,
+        first_name=HIDDEN_USER_DISPLAY_NAME,
+        karma=user.karma,
+        total_sent=user.total_sent,
+        total_received=user.total_received,
+        rank=get_rank(user.karma),
+    )
+
+
+def serialize_private_leaderboard_user(
+    user: models.User,
+    current_user: models.User,
+    db: Session,
+    context_type: str = "leaderboard",
+) -> schemas.LeaderboardUser:
+    reveal_asset = get_asset_by_symbol(db, TDSD_ASSET_SYMBOL)
+    context_id = str(user.id)
+    revealed = is_user_revealed(db, current_user, context_type, context_id, "user")
+    display_name = user_display_name(user) if revealed else HIDDEN_USER_DISPLAY_NAME
+    return schemas.LeaderboardUser(
+        id=user.id,
+        username=None,
+        first_name=display_name,
+        reveal_target=(
+            None
+            if revealed or not reveal_asset
+            else user_reveal_target(reveal_asset, context_type, context_id, "user")
+        ),
         karma=user.karma,
         total_sent=user.total_sent,
         total_received=user.total_received,
@@ -657,6 +725,79 @@ def user_display_name(user: models.User | None) -> str:
     return user.first_name or "Анонимно"
 
 
+def user_reveal_price_units(asset: models.Asset) -> int:
+    return USER_REVEAL_PRICE_TDSD * (10 ** max(int(asset.decimals or 0), 0))
+
+
+def user_reveal_target(
+    asset: models.Asset,
+    context_type: str,
+    context_id: str | int,
+    target_role: str,
+) -> schemas.UserRevealTargetPublic:
+    price_units = user_reveal_price_units(asset)
+    return schemas.UserRevealTargetPublic(
+        context_type=context_type,
+        context_id=str(context_id),
+        target_role=target_role,
+        price_units=price_units,
+        price_display=format_asset_units(price_units, asset.decimals),
+        label=f"Раскрыть пользователя — {USER_REVEAL_PRICE_TDSD} {asset.symbol}",
+    )
+
+
+def get_user_reveal(
+    db: Session,
+    viewer_user_id: int,
+    context_type: str,
+    context_id: str | int,
+    target_role: str,
+) -> models.UserReveal | None:
+    return db.scalar(
+        select(models.UserReveal).where(
+            models.UserReveal.viewer_user_id == viewer_user_id,
+            models.UserReveal.context_type == context_type,
+            models.UserReveal.context_id == str(context_id),
+            models.UserReveal.target_role == target_role,
+        )
+    )
+
+
+def is_user_revealed(
+    db: Session,
+    viewer: models.User,
+    context_type: str,
+    context_id: str | int,
+    target_role: str,
+) -> bool:
+    return bool(
+        get_user_reveal(
+            db=db,
+            viewer_user_id=viewer.id,
+            context_type=context_type,
+            context_id=context_id,
+            target_role=target_role,
+        )
+    )
+
+
+def reveal_display_name(
+    db: Session,
+    viewer: models.User,
+    target: models.User | None,
+    context_type: str,
+    context_id: str | int,
+    target_role: str,
+    hidden_label: str = HIDDEN_USER_DISPLAY_NAME,
+) -> tuple[str, bool]:
+    if not target:
+        return hidden_label, False
+    revealed = is_user_revealed(db, viewer, context_type, context_id, target_role)
+    if revealed:
+        return user_display_name(target), True
+    return hidden_label, False
+
+
 def referral_asset_decimals(db: Session) -> int:
     asset = get_asset_by_symbol(db, REFERRAL_REWARD_ASSET_SYMBOL)
     return int(asset.decimals if asset else 9)
@@ -763,10 +904,27 @@ def serialize_referral_dashboard(
 
 def serialize_asset_gift(
     gift: models.AssetGift,
-    current_user_id: int,
+    current_user: models.User,
+    db: Session,
 ) -> schemas.AssetGiftPublic:
+    current_user_id = current_user.id
     gift_type = "sent" if gift.sender_id == current_user_id else "received"
     counterparty = gift.receiver if gift_type == "sent" else gift.sender
+    reveal_asset = get_asset_by_symbol(db, TDSD_ASSET_SYMBOL)
+    context_id = str(gift.id)
+    target_role = "counterparty"
+    counterparty_revealed = is_user_revealed(
+        db,
+        current_user,
+        "asset_gift",
+        context_id,
+        target_role,
+    )
+    counterparty_display_name = (
+        user_display_name(counterparty)
+        if counterparty_revealed
+        else HIDDEN_USER_DISPLAY_NAME
+    )
     display_units = (
         int(gift.amount_units or 0)
         if gift_type == "sent"
@@ -788,7 +946,13 @@ def serialize_asset_gift(
         ),
         message=gift.message,
         status=gift.status,
-        counterparty_display_name=user_display_name(counterparty),
+        counterparty_display_name=counterparty_display_name,
+        counterparty_revealed=counterparty_revealed,
+        reveal_target=(
+            None
+            if counterparty_revealed or not reveal_asset
+            else user_reveal_target(reveal_asset, "asset_gift", context_id, target_role)
+        ),
         created_at=gift.created_at,
     )
 
@@ -809,13 +973,47 @@ def serialize_asset_gift_feed_item(gift: models.AssetGift) -> schemas.AssetGiftF
 
 def serialize_public_virtual_transaction(
     transaction: models.Transaction,
+    current_user: models.User,
+    db: Session,
 ) -> schemas.PublicTransactionFeedItem:
+    reveal_asset = get_asset_by_symbol(db, TDSD_ASSET_SYMBOL)
+    context_type = "virtual_gift"
+    context_id = f"virtual-{transaction.id}"
+    sender, sender_revealed = reveal_display_name(
+        db,
+        current_user,
+        transaction.sender,
+        context_type,
+        context_id,
+        "sender",
+    )
+    receiver, receiver_revealed = reveal_display_name(
+        db,
+        current_user,
+        transaction.receiver,
+        context_type,
+        context_id,
+        "receiver",
+        HIDDEN_RECEIVER_DISPLAY_NAME,
+    )
     return schemas.PublicTransactionFeedItem(
-        id=f"virtual-{transaction.id}",
-        source_type="virtual_gift",
+        id=context_id,
+        source_type=context_type,
         created_at=transaction.created_at,
-        sender=user_display_name(transaction.sender),
-        receiver=user_display_name(transaction.receiver),
+        sender=sender,
+        receiver=receiver,
+        sender_revealed=sender_revealed,
+        receiver_revealed=receiver_revealed,
+        sender_reveal=(
+            None
+            if sender_revealed or not reveal_asset
+            else user_reveal_target(reveal_asset, context_type, context_id, "sender")
+        ),
+        receiver_reveal=(
+            None
+            if receiver_revealed or not reveal_asset
+            else user_reveal_target(reveal_asset, context_type, context_id, "receiver")
+        ),
         token=TDSD_ASSET_SYMBOL,
         amount=str(transaction.amount),
         direction="Перевод",
@@ -825,14 +1023,48 @@ def serialize_public_virtual_transaction(
 
 def serialize_public_asset_transaction(
     gift: models.AssetGift,
+    current_user: models.User,
+    db: Session,
 ) -> schemas.PublicTransactionFeedItem:
     amount_units = int(gift.amount_units or 0)
+    reveal_asset = get_asset_by_symbol(db, TDSD_ASSET_SYMBOL)
+    context_type = "asset_gift"
+    context_id = f"asset-{gift.id}"
+    sender, sender_revealed = reveal_display_name(
+        db,
+        current_user,
+        gift.sender,
+        context_type,
+        context_id,
+        "sender",
+    )
+    receiver, receiver_revealed = reveal_display_name(
+        db,
+        current_user,
+        gift.receiver,
+        context_type,
+        context_id,
+        "receiver",
+        HIDDEN_RECEIVER_DISPLAY_NAME,
+    )
     return schemas.PublicTransactionFeedItem(
-        id=f"asset-{gift.id}",
-        source_type="asset_gift",
+        id=context_id,
+        source_type=context_type,
         created_at=gift.created_at,
-        sender=user_display_name(gift.sender),
-        receiver=user_display_name(gift.receiver),
+        sender=sender,
+        receiver=receiver,
+        sender_revealed=sender_revealed,
+        receiver_revealed=receiver_revealed,
+        sender_reveal=(
+            None
+            if sender_revealed or not reveal_asset
+            else user_reveal_target(reveal_asset, context_type, context_id, "sender")
+        ),
+        receiver_reveal=(
+            None
+            if receiver_revealed or not reveal_asset
+            else user_reveal_target(reveal_asset, context_type, context_id, "receiver")
+        ),
         token=gift.asset.symbol,
         amount=format_asset_units(amount_units, gift.asset.decimals),
         direction="Перевод",
@@ -848,25 +1080,59 @@ def serialize_public_fee_entry(
         id=f"fee-{entry.id}",
         source_type="fee",
         created_at=entry.created_at,
-        sender="Сервис" if is_treasury_income else user_display_name(entry.user),
-        receiver="Treasury",
+        sender="Сервис" if is_treasury_income else HIDDEN_USER_DISPLAY_NAME,
+        receiver="Платформа",
         token=entry.asset.symbol,
         amount=format_asset_units(entry.amount_units, entry.asset.decimals),
         direction="Комиссия сервиса",
-        comment=entry.comment,
+        comment=None,
     )
 
 
 def serialize_public_referral_reward(
     reward: models.ReferralReward,
     decimals: int,
+    current_user: models.User,
+    db: Session,
 ) -> schemas.PublicTransactionFeedItem:
+    reveal_asset = get_asset_by_symbol(db, TDSD_ASSET_SYMBOL)
+    context_type = "referral_reward"
+    context_id = f"referral-{reward.id}"
+    sender, sender_revealed = reveal_display_name(
+        db,
+        current_user,
+        reward.referred_user,
+        context_type,
+        context_id,
+        "sender",
+    )
+    receiver, receiver_revealed = reveal_display_name(
+        db,
+        current_user,
+        reward.referrer,
+        context_type,
+        context_id,
+        "receiver",
+        HIDDEN_RECEIVER_DISPLAY_NAME,
+    )
     return schemas.PublicTransactionFeedItem(
-        id=f"referral-{reward.id}",
-        source_type="referral_reward",
+        id=context_id,
+        source_type=context_type,
         created_at=reward.credited_at or reward.created_at,
-        sender=user_display_name(reward.referred_user),
-        receiver=user_display_name(reward.referrer),
+        sender=sender,
+        receiver=receiver,
+        sender_revealed=sender_revealed,
+        receiver_revealed=receiver_revealed,
+        sender_reveal=(
+            None
+            if sender_revealed or not reveal_asset
+            else user_reveal_target(reveal_asset, context_type, context_id, "sender")
+        ),
+        receiver_reveal=(
+            None
+            if receiver_revealed or not reveal_asset
+            else user_reveal_target(reveal_asset, context_type, context_id, "receiver")
+        ),
         token=REFERRAL_REWARD_ASSET_SYMBOL,
         amount=format_asset_units(reward.reward_amount_tdsd, decimals),
         direction="Реферальная награда",
@@ -878,13 +1144,145 @@ def serialize_asset_gift_leaderboard_user(
     user: models.User,
     amount_units: int,
     asset: models.Asset,
+    current_user: models.User,
+    db: Session,
 ) -> schemas.AssetGiftLeaderboardUser:
+    reveal_asset = get_asset_by_symbol(db, TDSD_ASSET_SYMBOL)
+    context_type = "asset_gift_leaderboard"
+    context_id = str(user.id)
+    revealed = is_user_revealed(db, current_user, context_type, context_id, "user")
+    display_name = user_display_name(user) if revealed else HIDDEN_USER_DISPLAY_NAME
     return schemas.AssetGiftLeaderboardUser(
         id=user.id,
-        username=user.username,
-        first_name=user.first_name,
+        username=None,
+        first_name=display_name,
+        reveal_target=(
+            None
+            if revealed or not reveal_asset
+            else user_reveal_target(reveal_asset, context_type, context_id, "user")
+        ),
         amount_units=int(amount_units or 0),
         amount_display=format_asset_units(amount_units or 0, asset.decimals),
+    )
+
+
+def parse_reveal_context_numeric_id(context_id: str) -> int:
+    raw = str(context_id).strip()
+    if "-" in raw:
+        raw = raw.rsplit("-", 1)[-1]
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Некорректная запись для раскрытия",
+        ) from exc
+    if value <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Некорректная запись для раскрытия",
+        )
+    return value
+
+
+def canonical_reveal_context_id(
+    context_type: str,
+    context_id: str,
+    target_role: str,
+) -> str:
+    numeric_id = parse_reveal_context_numeric_id(context_id)
+    if context_type == "virtual_gift" and target_role in {"sender", "receiver"}:
+        expected = f"virtual-{numeric_id}"
+    elif context_type == "asset_gift" and target_role in {"sender", "receiver"}:
+        expected = f"asset-{numeric_id}"
+    elif context_type == "asset_gift" and target_role == "counterparty":
+        expected = str(numeric_id)
+    elif context_type == "referral_reward" and target_role in {"sender", "receiver"}:
+        expected = f"referral-{numeric_id}"
+    elif context_type in {"leaderboard", "asset_gift_leaderboard"} and target_role == "user":
+        expected = str(numeric_id)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Некорректный запрос на раскрытие пользователя",
+        )
+    if str(context_id).strip() != expected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Некорректная запись для раскрытия",
+        )
+    return expected
+
+
+def resolve_reveal_target_user(
+    db: Session,
+    current_user: models.User,
+    context_type: str,
+    context_id: str,
+    target_role: str,
+) -> models.User:
+    normalized_context = context_type.strip()
+    normalized_role = target_role.strip()
+    numeric_id = parse_reveal_context_numeric_id(context_id)
+
+    if normalized_context == "virtual_gift":
+        transaction = db.get(models.Transaction, numeric_id)
+        if not transaction:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Запись не найдена",
+            )
+        if normalized_role == "sender":
+            return transaction.sender
+        if normalized_role == "receiver":
+            return transaction.receiver
+
+    if normalized_context == "asset_gift":
+        gift = db.get(models.AssetGift, numeric_id)
+        if not gift:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Запись не найдена",
+            )
+        if normalized_role == "sender":
+            return gift.sender
+        if normalized_role == "receiver":
+            return gift.receiver
+        if normalized_role == "counterparty":
+            if gift.sender_id == current_user.id:
+                return gift.receiver
+            if gift.receiver_id == current_user.id:
+                return gift.sender
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Эта запись недоступна",
+            )
+
+    if normalized_context == "referral_reward":
+        reward = db.get(models.ReferralReward, numeric_id)
+        if not reward:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Запись не найдена",
+            )
+        if normalized_role == "sender":
+            return reward.referred_user
+        if normalized_role == "receiver":
+            return reward.referrer
+
+    if normalized_context in {"leaderboard", "asset_gift_leaderboard"}:
+        if normalized_role == "user":
+            user = db.get(models.User, numeric_id)
+            if user:
+                return user
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Пользователь не найден",
+            )
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Некорректный запрос на раскрытие пользователя",
     )
 
 
@@ -1276,8 +1674,10 @@ def readiness(db: Session = Depends(get_db)) -> schemas.HealthResponse:
 @app.post("/auth/telegram", response_model=schemas.AuthResponse)
 def auth_telegram(
     payload: schemas.TelegramAuthRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> schemas.AuthResponse:
+    enforce_rate_limit("auth", rate_limit_key(request))
     if payload.mock:
         if not ALLOW_MOCK_AUTH:
             raise HTTPException(
@@ -1811,9 +2211,11 @@ def asset_balance_by_symbol(
 )
 def send_random_asset_gift_endpoint(
     payload: schemas.AssetGiftSendRequest,
+    request: Request,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> schemas.AssetGiftSendResponse:
+    enforce_rate_limit("asset_gift_send", rate_limit_key(request, current_user))
     symbol = payload.asset_symbol or payload.symbol
     gift, sender_balance = send_random_asset_gift(
         db=db,
@@ -1823,8 +2225,8 @@ def send_random_asset_gift_endpoint(
         message=payload.message,
     )
     return schemas.AssetGiftSendResponse(
-        message="Asset-подарок отправлен случайному пользователю",
-        gift=serialize_asset_gift(gift, current_user.id),
+        message="TDSD отправлены случайному пользователю",
+        gift=serialize_asset_gift(gift, current_user, db),
         sender_balance=serialize_asset_balance(gift.asset, sender_balance.balance_units),
     )
 
@@ -1846,7 +2248,7 @@ def asset_gifts(
         .order_by(desc(models.AssetGift.created_at))
         .limit(limit)
     ).all()
-    return [serialize_asset_gift(gift, current_user.id) for gift in rows]
+    return [serialize_asset_gift(gift, current_user, db) for gift in rows]
 
 
 @app.get("/asset-gifts/history", response_model=list[schemas.AssetGiftPublic])
@@ -1856,6 +2258,130 @@ def asset_gifts_history(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> list[schemas.AssetGiftPublic]:
     return asset_gifts(current_user=current_user, db=db, limit=limit)
+
+
+@app.post("/users/reveal", response_model=schemas.UserRevealResponse)
+def reveal_user(
+    payload: schemas.UserRevealRequest,
+    request: Request,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> schemas.UserRevealResponse:
+    enforce_rate_limit("user_reveal", rate_limit_key(request, current_user))
+    context_type = payload.context_type.strip()
+    target_role = payload.target_role.strip()
+    context_id = canonical_reveal_context_id(
+        context_type,
+        payload.context_id.strip(),
+        target_role,
+    )
+    target_user = resolve_reveal_target_user(
+        db=db,
+        current_user=current_user,
+        context_type=context_type,
+        context_id=context_id,
+        target_role=target_role,
+    )
+    asset = get_asset_by_symbol(db, TDSD_ASSET_SYMBOL)
+    if not asset or not asset.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="TDSD временно недоступен",
+        )
+
+    price_units = user_reveal_price_units(asset)
+    existing_reveal = get_user_reveal(
+        db=db,
+        viewer_user_id=current_user.id,
+        context_type=context_type,
+        context_id=context_id,
+        target_role=target_role,
+    )
+    if existing_reveal:
+        balance = get_or_create_asset_balance(db, current_user.id, asset.id)
+        return schemas.UserRevealResponse(
+            display_name=user_display_name(target_user),
+            revealed_user_id=target_user.id,
+            context_type=context_type,
+            context_id=context_id,
+            target_role=target_role,
+            price_units=int(existing_reveal.price_units or price_units),
+            price_display=format_asset_units(
+                existing_reveal.price_units or price_units,
+                asset.decimals,
+            ),
+            charged=False,
+            balance=serialize_asset_balance(asset, balance.balance_units),
+        )
+
+    target_user_id = target_user.id
+    reveal = models.UserReveal(
+        viewer_user_id=current_user.id,
+        revealed_user_id=target_user_id,
+        context_type=context_type,
+        context_id=context_id,
+        target_role=target_role,
+        price_units=price_units,
+    )
+    db.add(reveal)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        balance = get_or_create_asset_balance(db, current_user.id, asset.id)
+        target_user = db.get(models.User, target_user_id)
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Пользователь не найден",
+            )
+        return schemas.UserRevealResponse(
+            display_name=user_display_name(target_user),
+            revealed_user_id=target_user.id,
+            context_type=context_type,
+            context_id=context_id,
+            target_role=target_role,
+            price_units=price_units,
+            price_display=format_asset_units(price_units, asset.decimals),
+            charged=False,
+            balance=serialize_asset_balance(asset, balance.balance_units),
+        )
+
+    balance = debit_asset_balance(
+        db=db,
+        user=current_user,
+        asset=asset,
+        amount_units=price_units,
+        entry_type="user_reveal",
+        related_entity_type="user_reveal",
+        related_entity_id=reveal.id,
+        comment=f"Раскрытие пользователя #{target_user.id}",
+    )
+
+    treasury_user = get_or_create_treasury_user(db)
+    credit_asset_balance(
+        db=db,
+        user=treasury_user,
+        asset=asset,
+        amount_units=price_units,
+        entry_type="treasury_income",
+        related_entity_type="user_reveal",
+        related_entity_id=reveal.id,
+        comment=f"Оплата раскрытия пользователя #{target_user.id}",
+    )
+    db.commit()
+    db.refresh(balance)
+    return schemas.UserRevealResponse(
+        display_name=user_display_name(target_user),
+        revealed_user_id=target_user.id,
+        context_type=context_type,
+        context_id=context_id,
+        target_role=target_role,
+        price_units=price_units,
+        price_display=format_asset_units(price_units, asset.decimals),
+        charged=True,
+        balance=serialize_asset_balance(asset, balance.balance_units),
+    )
 
 
 @app.get("/asset-gifts/feed", response_model=list[schemas.AssetGiftFeedItem])
@@ -1878,6 +2404,7 @@ def asset_gifts_feed(
 )
 def asset_gifts_leaderboard(
     symbol: Annotated[str, Query(min_length=1, max_length=32)] = TDSD_ASSET_SYMBOL,
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> schemas.AssetGiftLeaderboardResponse:
     asset = get_asset_by_symbol(db, symbol)
@@ -1917,11 +2444,23 @@ def asset_gifts_leaderboard(
         symbol=asset.symbol,
         asset_name=asset.name,
         senders=[
-            serialize_asset_gift_leaderboard_user(user, total_units, asset)
+            serialize_asset_gift_leaderboard_user(
+                user,
+                total_units,
+                asset,
+                current_user,
+                db,
+            )
             for user, total_units in sender_rows
         ],
         receivers=[
-            serialize_asset_gift_leaderboard_user(user, total_units, asset)
+            serialize_asset_gift_leaderboard_user(
+                user,
+                total_units,
+                asset,
+                current_user,
+                db,
+            )
             for user, total_units in receiver_rows
         ],
     )
@@ -1991,9 +2530,11 @@ def create_asset_deposit(
 )
 def verify_asset_deposit(
     deposit_id: int,
+    request: Request,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> schemas.AssetDepositVerifyResponse:
+    enforce_rate_limit("verify_deposit", rate_limit_key(request, current_user))
     deposit = db.scalar(
         select(models.AssetDeposit).where(
             models.AssetDeposit.id == deposit_id,
@@ -2303,9 +2844,11 @@ def create_ton_deposit(
 )
 def verify_ton_deposit(
     deposit_id: int,
+    request: Request,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> schemas.TonDepositVerifyResponse:
+    enforce_rate_limit("verify_deposit", rate_limit_key(request, current_user))
     deposit = db.scalar(
         select(models.TonDeposit).where(
             models.TonDeposit.id == deposit_id,
@@ -2538,13 +3081,15 @@ def ton_deposits(
 @app.post("/gift/send", response_model=schemas.GiftSendResponse)
 def send_gift(
     payload: schemas.GiftSendRequest,
+    request: Request,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> schemas.GiftSendResponse:
+    enforce_rate_limit("asset_gift_send", rate_limit_key(request, current_user))
     if current_user.balance < payload.amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Недостаточно монет",
+            detail="Недостаточно TDSD",
         )
 
     available_receivers = db.scalar(
@@ -2590,9 +3135,25 @@ def send_gift(
             detail="Не удалось выбрать получателя",
         )
 
-    # Деньги не используются: это простое перемещение виртуальных монет внутри SQLite.
-    current_user.balance -= payload.amount
-    current_user.total_sent += payload.amount
+    debit_result = db.execute(
+        update(models.User)
+        .where(
+            models.User.id == current_user.id,
+            models.User.balance >= payload.amount,
+        )
+        .values(
+            balance=models.User.balance - payload.amount,
+            total_sent=models.User.total_sent + payload.amount,
+            last_active_at=datetime.utcnow(),
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if debit_result.rowcount != 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Недостаточно TDSD",
+        )
+    db.refresh(current_user)
 
     receiver.balance += payload.amount
     receiver.total_received += payload.amount
@@ -2651,6 +3212,7 @@ def transactions(
     response_model=list[schemas.PublicTransactionFeedItem],
 )
 def public_transactions(
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
 ) -> list[schemas.PublicTransactionFeedItem]:
@@ -2677,11 +3239,22 @@ def public_transactions(
     ).all()
     referral_decimals = referral_asset_decimals(db)
     rows = [
-        *[serialize_public_virtual_transaction(transaction) for transaction in virtual_rows],
-        *[serialize_public_asset_transaction(gift) for gift in asset_rows],
+        *[
+            serialize_public_virtual_transaction(transaction, current_user, db)
+            for transaction in virtual_rows
+        ],
+        *[
+            serialize_public_asset_transaction(gift, current_user, db)
+            for gift in asset_rows
+        ],
         *[serialize_public_fee_entry(entry) for entry in fee_rows],
         *[
-            serialize_public_referral_reward(reward, referral_decimals)
+            serialize_public_referral_reward(
+                reward,
+                referral_decimals,
+                current_user,
+                db,
+            )
             for reward in referral_rows
         ],
     ]
@@ -2689,7 +3262,10 @@ def public_transactions(
 
 
 @app.get("/leaderboard", response_model=schemas.LeaderboardResponse)
-def leaderboard(db: Session = Depends(get_db)) -> schemas.LeaderboardResponse:
+def leaderboard(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> schemas.LeaderboardResponse:
     top_karma = db.scalars(
         select(models.User)
         .order_by(desc(models.User.karma), models.User.created_at)
@@ -2706,7 +3282,16 @@ def leaderboard(db: Session = Depends(get_db)) -> schemas.LeaderboardResponse:
         .limit(100)
     ).all()
     return schemas.LeaderboardResponse(
-        karma=[serialize_leaderboard_user(user) for user in top_karma],
-        senders=[serialize_leaderboard_user(user) for user in top_senders],
-        receivers=[serialize_leaderboard_user(user) for user in top_receivers],
+        karma=[
+            serialize_private_leaderboard_user(user, current_user, db)
+            for user in top_karma
+        ],
+        senders=[
+            serialize_private_leaderboard_user(user, current_user, db)
+            for user in top_senders
+        ],
+        receivers=[
+            serialize_private_leaderboard_user(user, current_user, db)
+            for user in top_receivers
+        ],
     )

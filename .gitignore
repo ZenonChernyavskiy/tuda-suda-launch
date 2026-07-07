@@ -1,4 +1,6 @@
 .DS_Store
+.git/
+__MACOSX/
 .env
 .env.production
 *.db
@@ -6,6 +8,9 @@
 *.sqlite3
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
 .venv/
 node_modules/
 dist/
