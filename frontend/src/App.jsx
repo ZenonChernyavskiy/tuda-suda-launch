@@ -948,6 +948,8 @@ function TonTopUpScreen({
   const hasSavedWallet = Boolean(savedAddress);
   const isDifferentWallet =
     hasConnectedWallet && hasSavedWallet && connectedAddress !== savedAddress;
+  const needsWalletAutoSave =
+    hasConnectedWallet && (!hasSavedWallet || isDifferentWallet);
   const amount = customAmount.trim();
   const buyCommissionPercent =
     feeConfig?.buy_commission_percent || feeConfig?.purchase_fee_percent || "1";
@@ -986,11 +988,7 @@ function TonTopUpScreen({
 
         <div className="wallet-state">
           <span
-            className={
-              hasConnectedWallet && hasSavedWallet && !isDifferentWallet
-                ? "wallet-dot connected"
-                : "wallet-dot"
-            }
+            className={hasConnectedWallet ? "wallet-dot connected" : "wallet-dot"}
           />
           <strong>
             {!hasConnectedWallet
@@ -1012,7 +1010,13 @@ function TonTopUpScreen({
 
         {isDifferentWallet ? (
           <p className="wallet-warning">
-            Сохраните новый адрес в профиле или подключите сохраненный кошелек.
+            Подключенный адрес будет сохранен автоматически перед покупкой.
+          </p>
+        ) : null}
+
+        {needsWalletAutoSave && !isDifferentWallet ? (
+          <p className="wallet-note">
+            Подключенный адрес будет сохранен автоматически перед покупкой.
           </p>
         ) : null}
 
@@ -1078,8 +1082,6 @@ function TonTopUpScreen({
             disabled={
               depositLoading ||
               !hasConnectedWallet ||
-              !hasSavedWallet ||
-              isDifferentWallet ||
               !selectedAsset
             }
             type="submit"
@@ -1973,6 +1975,32 @@ export default function App() {
     }
   }
 
+  async function ensurePurchaseWalletSaved() {
+    if (!connectedTonAddress) {
+      throw new Error("Сначала подключите кошелек");
+    }
+    const savedAddress = savedWallet?.wallet_address || dashboard?.user.ton_wallet_address || "";
+    if (savedAddress === connectedTonAddress) {
+      return;
+    }
+
+    setWalletSaving(true);
+    try {
+      const updatedUser = await api.connectWallet(connectedTonAddress);
+      setDashboard((current) =>
+        current ? { ...current, user: updatedUser } : current,
+      );
+      setSavedWallet({
+        wallet_address: updatedUser.ton_wallet_address,
+        connected_at: updatedUser.ton_wallet_connected_at,
+      });
+    } catch {
+      throw new Error("Не удалось сохранить подключенный кошелек");
+    } finally {
+      setWalletSaving(false);
+    }
+  }
+
   async function handleSaveWallet() {
     if (!connectedTonAddress) {
       setError("Сначала подключите кошелек");
@@ -2038,6 +2066,7 @@ export default function App() {
     setError("");
     setSuccess("");
     try {
+      await ensurePurchaseWalletSaved();
       const deposit = await api.createAssetDeposit({
         asset_symbol: asset.symbol,
         amount_units: amountUnits.toString(),
