@@ -8,6 +8,7 @@ ARG VITE_TONCONNECT_MANIFEST_URL
 ARG VITE_ENABLE_MOCK_AUTH=false
 
 COPY package.json package-lock.json ./
+RUN npm install -g npm@10.9.2
 RUN npm ci --include=dev --no-audit --no-fund
 
 COPY . .
