@@ -931,6 +931,7 @@ function TonTopUpScreen({
   onPayDeposit,
   onCopyPaymentAddress,
   onVerifyDeposit,
+  onOpenTonConnect,
 }) {
   const [purchaseMode, setPurchaseMode] = useState("tdsd");
   const [customAmount, setCustomAmount] = useState("10");
@@ -975,6 +976,10 @@ function TonTopUpScreen({
   async function handleCreate(event) {
     event.preventDefault();
     if (!selectedAsset) return;
+    if (!hasConnectedWallet) {
+      await onOpenTonConnect();
+      return;
+    }
     await onCreateDeposit(selectedAsset, tdsdAmountDisplay);
   }
 
@@ -1006,6 +1011,12 @@ function TonTopUpScreen({
             <span>Сохраненный адрес</span>
             <b>{shortenAddress(savedAddress)}</b>
           </div>
+        ) : null}
+
+        {!hasConnectedWallet && hasSavedWallet ? (
+          <p className="wallet-note">
+            Адрес сохранен, но для покупки нужно подключить кошелек в текущей сессии.
+          </p>
         ) : null}
 
         {isDifferentWallet ? (
@@ -1081,12 +1092,15 @@ function TonTopUpScreen({
             className="primary"
             disabled={
               depositLoading ||
-              !hasConnectedWallet ||
               !selectedAsset
             }
             type="submit"
           >
-            {depositLoading ? "Создаем..." : "Купить TDSD"}
+            {depositLoading
+              ? "Создаем..."
+              : hasConnectedWallet
+                ? "Купить TDSD"
+                : "Подключить кошелек"}
           </button>
         </form>
 
@@ -1605,7 +1619,7 @@ function ProfileScreen({
         <div className="wallet-state">
           <span
             className={
-              hasConnectedWallet || hasSavedWallet
+              hasConnectedWallet
                 ? "wallet-dot connected"
                 : "wallet-dot"
             }
@@ -1791,6 +1805,7 @@ export default function App() {
     feeConfig,
     onCreateDeposit: handleCreateTonDeposit,
     onCopyPaymentAddress: handleCopyPaymentAddress,
+    onOpenTonConnect: handleOpenTonConnect,
     onPayDeposit: handlePayTonDeposit,
     onVerifyDeposit: handleVerifyTonDeposit,
     paying,
