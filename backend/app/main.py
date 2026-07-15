@@ -7,7 +7,7 @@ import secrets
 import time
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import desc, func, not_, or_, select, update
@@ -75,6 +75,7 @@ from .referral_service import (
     ensure_referral_code,
 )
 from .security import create_access_token, decode_access_token, parse_telegram_init_data
+from .telegram_bot import send_asset_gift_received_notification
 from .ton import TonAddressValidationError, normalize_ton_wallet_address
 from .ton_service import TonCenterError, verify_deposit
 
@@ -2212,6 +2213,7 @@ def asset_balance_by_symbol(
 def send_random_asset_gift_endpoint(
     payload: schemas.AssetGiftSendRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> schemas.AssetGiftSendResponse:
@@ -2223,6 +2225,12 @@ def send_random_asset_gift_endpoint(
         asset_symbol=symbol or "",
         amount_units=payload.amount_units,
         message=payload.message,
+    )
+    background_tasks.add_task(
+        send_asset_gift_received_notification,
+        gift.receiver.telegram_id,
+        format_asset_units(gift.net_amount_units, gift.asset.decimals),
+        gift.asset.symbol,
     )
     return schemas.AssetGiftSendResponse(
         message="TDSD отправлены случайному пользователю",
