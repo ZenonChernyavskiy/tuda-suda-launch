@@ -1,0 +1,34 @@
+# Add these locations to the existing server block for app.tudasuda.tech.
+# The API token include is root-only and must be created on the server.
+
+location = /admin {
+    return 301 /admin/;
+}
+
+location = /admin.html {
+    return 404;
+}
+
+location ^~ /admin/ {
+    auth_basic "Tuda Suda Admin";
+    auth_basic_user_file /etc/nginx/.htpasswd-tuda-suda-admin;
+
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location ^~ /admin-api/ {
+    auth_basic "Tuda Suda Admin";
+    auth_basic_user_file /etc/nginx/.htpasswd-tuda-suda-admin;
+
+    include /etc/nginx/snippets/tuda-suda-admin-token.conf;
+    rewrite ^/admin-api/(.*)$ /admin/$1 break;
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}

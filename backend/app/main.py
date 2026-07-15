@@ -5,7 +5,7 @@ import json
 import logging
 import secrets
 import time
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +19,11 @@ from .asset_gift_service import (
     debit_asset_balance,
     get_or_create_treasury_user,
     send_random_asset_gift,
+)
+from .admin_statistics import (
+    build_admin_activity,
+    build_admin_overview,
+    build_admin_timeseries,
 )
 from .config import (
     ALLOW_MOCK_AUTH,
@@ -2170,7 +2175,11 @@ def admin_reputation_events(
 )
 def admin_statistics(db: Session = Depends(get_db)) -> schemas.AdminStatsPublic:
     return schemas.AdminStatsPublic(
-        users_count=db.scalar(select(func.count(models.User.id))) or 0,
+        users_count=db.scalar(
+            select(func.count(models.User.id)).where(
+                not_(models.User.telegram_id.like("system:%"))
+            )
+        ) or 0,
         active_assets_count=db.scalar(
             select(func.count(models.Asset.id)).where(models.Asset.is_active.is_(True))
         ) or 0,
@@ -2179,6 +2188,42 @@ def admin_statistics(db: Session = Depends(get_db)) -> schemas.AdminStatsPublic:
         virtual_transactions_count=db.scalar(select(func.count(models.Transaction.id))) or 0,
         deposits_count=db.scalar(select(func.count(models.AssetDeposit.id))) or 0,
     )
+
+
+@app.get(
+    "/admin/dashboard/overview",
+    response_model=schemas.AdminDashboardOverview,
+    dependencies=[Depends(require_admin)],
+)
+def admin_dashboard_overview(
+    period: Annotated[Literal["today", "7d", "30d", "all"], Query()] = "30d",
+    db: Session = Depends(get_db),
+) -> schemas.AdminDashboardOverview:
+    return build_admin_overview(db, period)
+
+
+@app.get(
+    "/admin/dashboard/timeseries",
+    response_model=schemas.AdminDashboardTimeSeries,
+    dependencies=[Depends(require_admin)],
+)
+def admin_dashboard_timeseries(
+    days: Annotated[int, Query(ge=1, le=180)] = 30,
+    db: Session = Depends(get_db),
+) -> schemas.AdminDashboardTimeSeries:
+    return build_admin_timeseries(db, days)
+
+
+@app.get(
+    "/admin/dashboard/activity",
+    response_model=schemas.AdminDashboardActivity,
+    dependencies=[Depends(require_admin)],
+)
+def admin_dashboard_activity(
+    limit: Annotated[int, Query(ge=1, le=50)] = 12,
+    db: Session = Depends(get_db),
+) -> schemas.AdminDashboardActivity:
+    return build_admin_activity(db, limit)
 
 
 @app.get(

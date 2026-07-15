@@ -349,6 +349,14 @@ Admin, требует `X-Admin-Token`:
 - `GET /admin/reputation`
 - `GET /admin/karma`
 - `GET /admin/statistics`
+- `GET /admin/dashboard/overview`
+- `GET /admin/dashboard/timeseries`
+- `GET /admin/dashboard/activity`
+
+Отдельная browser admin-панель собирается как независимый Vite entry и
+открывается по `/admin/`. Production-защита страницы и same-origin gateway
+`/admin-api/` описаны в [ADMIN_PANEL_DEPLOYMENT.md](./ADMIN_PANEL_DEPLOYMENT.md).
+`ADMIN_API_KEY` не добавляется во frontend env и не попадает в browser bundle.
 
 ## Ledger
 

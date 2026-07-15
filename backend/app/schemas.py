@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -505,6 +505,127 @@ class AdminStatsPublic(BaseModel):
     ledger_entries_count: int
     virtual_transactions_count: int
     deposits_count: int
+
+
+class AdminDashboardUsersStats(BaseModel):
+    total: int
+    new_in_period: int
+    active_in_period: int
+    active_1d: int
+    active_7d: int
+    active_30d: int
+    wallets_connected: int
+
+
+class AdminDashboardGiftStats(BaseModel):
+    count: int
+    gross_units: int
+    gross_display: str
+    net_units: int
+    net_display: str
+    fee_units: int
+    fee_display: str
+    average_units: int
+    average_display: str
+    unique_senders: int
+    unique_receivers: int
+
+
+class AdminDashboardPurchaseStats(BaseModel):
+    created: int
+    pending_payment: int
+    payment_confirmed: int
+    successful: int
+    payment_failed: int
+    payout_pending: int
+    payout_failed: int
+    purchased_units: int
+    purchased_display: str
+    payment_amount_nano: int
+    payment_amount_ton: str
+
+
+class AdminDashboardRevenueStats(BaseModel):
+    purchase_fee_units: int
+    purchase_fee_display: str
+    transfer_fee_units: int
+    transfer_fee_display: str
+    reveal_income_units: int
+    reveal_income_display: str
+    total_units: int
+    total_display: str
+
+
+class AdminDashboardReferralStats(BaseModel):
+    invited_users: int
+    credited_rewards: int
+    credited_reward_units: int
+    credited_reward_display: str
+
+
+class AdminDashboardRevealStats(BaseModel):
+    count: int
+    income_units: int
+    income_display: str
+
+
+class AdminDashboardOverview(BaseModel):
+    period: Literal["today", "7d", "30d", "all"]
+    period_start: datetime | None
+    generated_at: datetime
+    asset_symbol: str
+    users: AdminDashboardUsersStats
+    gifts: AdminDashboardGiftStats
+    purchases: AdminDashboardPurchaseStats
+    revenue: AdminDashboardRevenueStats
+    referrals: AdminDashboardReferralStats
+    reveals: AdminDashboardRevealStats
+    legacy_transactions_count: int
+
+
+class AdminDashboardTimeSeriesPoint(BaseModel):
+    date: date
+    new_users: int
+    gifts_count: int
+    gift_volume_units: int
+    gift_volume_display: str
+    purchases_count: int
+    purchase_volume_units: int
+    purchase_volume_display: str
+
+
+class AdminDashboardTimeSeries(BaseModel):
+    days: int
+    asset_symbol: str
+    points: list[AdminDashboardTimeSeriesPoint]
+
+
+class AdminDashboardGiftActivity(BaseModel):
+    id: int
+    sender: str
+    receiver: str
+    amount_display: str
+    net_amount_display: str
+    fee_display: str
+    status: str
+    created_at: datetime
+
+
+class AdminDashboardPurchaseActivity(BaseModel):
+    id: int
+    user: str
+    amount_display: str
+    payment_amount_ton: str
+    status: str
+    payout_status: str
+    error: str | None
+    created_at: datetime
+    confirmed_at: datetime | None
+
+
+class AdminDashboardActivity(BaseModel):
+    recent_gifts: list[AdminDashboardGiftActivity]
+    recent_purchases: list[AdminDashboardPurchaseActivity]
 
 
 class AssetGiftSendRequest(BaseModel):
