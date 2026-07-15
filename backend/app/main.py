@@ -24,6 +24,7 @@ from .admin_statistics import (
     build_admin_activity,
     build_admin_overview,
     build_admin_timeseries,
+    build_admin_users_page,
 )
 from .config import (
     ALLOW_MOCK_AUTH,
@@ -2224,6 +2225,25 @@ def admin_dashboard_activity(
     db: Session = Depends(get_db),
 ) -> schemas.AdminDashboardActivity:
     return build_admin_activity(db, limit)
+
+
+@app.get(
+    "/admin/dashboard/users",
+    response_model=schemas.AdminDashboardUsersPage,
+    dependencies=[Depends(require_admin)],
+)
+def admin_dashboard_users(
+    db: Session = Depends(get_db),
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    query: Annotated[str | None, Query(max_length=128)] = None,
+) -> schemas.AdminDashboardUsersPage:
+    return build_admin_users_page(
+        db,
+        limit=limit,
+        offset=offset,
+        query=query,
+    )
 
 
 @app.get(

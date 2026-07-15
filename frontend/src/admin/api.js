@@ -42,4 +42,12 @@ export const adminApi = {
   getActivity(limit = 12) {
     return adminRequest(`/dashboard/activity?limit=${limit}`);
   },
+  getUsers({ query = "", limit = 50, offset = 0 } = {}) {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (query) params.set("query", query);
+    return adminRequest(`/dashboard/users?${params.toString()}`);
+  },
 };

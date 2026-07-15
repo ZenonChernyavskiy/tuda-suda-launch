@@ -1,8 +1,8 @@
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-from sqlalchemy import and_, case, func, not_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, case, desc, func, not_, or_, select
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from . import models, schemas
 from .config import TDSD_ASSET_SYMBOL
@@ -71,6 +71,102 @@ def _user_label(user: models.User) -> str:
     if user.first_name:
         return user.first_name
     return f"User #{user.id}"
+
+
+def build_admin_users_page(
+    db: Session,
+    *,
+    limit: int,
+    offset: int,
+    query: str | None = None,
+) -> schemas.AdminDashboardUsersPage:
+    conditions = _real_user_conditions()
+    cleaned_query = (query or "").strip()
+    if cleaned_query:
+        pattern = f"%{cleaned_query}%"
+        conditions.append(
+            or_(
+                models.User.telegram_id.ilike(pattern),
+                models.User.username.ilike(pattern),
+                models.User.first_name.ilike(pattern),
+                models.User.ton_wallet_address.ilike(pattern),
+            )
+        )
+
+    total = _count(
+        db,
+        select(func.count(models.User.id)).where(*conditions),
+    )
+    referrer = aliased(models.User)
+    rows = db.execute(
+        select(models.User, referrer)
+        .outerjoin(referrer, models.User.referred_by_user_id == referrer.id)
+        .where(*conditions)
+        .order_by(desc(models.User.created_at), desc(models.User.id))
+        .limit(limit)
+        .offset(offset)
+    ).all()
+
+    asset = _tdsd_asset(db)
+    balances_by_user: dict[int, int] = {}
+    user_ids = [user.id for user, _ in rows]
+    if asset is not None and user_ids:
+        balances_by_user = {
+            int(user_id): int(balance_units or 0)
+            for user_id, balance_units in db.execute(
+                select(
+                    models.AssetBalance.user_id,
+                    models.AssetBalance.balance_units,
+                ).where(
+                    models.AssetBalance.asset_id == asset.id,
+                    models.AssetBalance.user_id.in_(user_ids),
+                )
+            ).all()
+        }
+
+    tdsd_decimals = int(asset.decimals if asset else 9)
+    items = []
+    for user, referred_by in rows:
+        tdsd_balance_units = balances_by_user.get(user.id, 0)
+        ton_balance_nano = int(user.ton_balance_nano or 0)
+        items.append(
+            schemas.AdminDashboardUserItem(
+                id=user.id,
+                telegram_id=user.telegram_id,
+                username=user.username,
+                first_name=user.first_name,
+                photo_url=user.photo_url,
+                balance=int(user.balance or 0),
+                karma=int(user.karma or 0),
+                reputation=int(user.reputation or 0),
+                risk_score=int(user.risk_score or 0),
+                community_weight=int(user.community_weight or 0),
+                total_sent=int(user.total_sent or 0),
+                total_received=int(user.total_received or 0),
+                ton_balance_nano=ton_balance_nano,
+                ton_balance_display=_format_units(ton_balance_nano, 9),
+                tdsd_balance_units=tdsd_balance_units,
+                tdsd_balance_display=_format_units(
+                    tdsd_balance_units,
+                    tdsd_decimals,
+                ),
+                ton_wallet_address=user.ton_wallet_address,
+                ton_wallet_connected_at=user.ton_wallet_connected_at,
+                referral_code=user.referral_code,
+                referred_by_user_id=user.referred_by_user_id,
+                referrer=_user_label(referred_by) if referred_by else None,
+                referred_at=user.referred_at,
+                created_at=user.created_at,
+                last_active_at=user.last_active_at,
+            )
+        )
+
+    return schemas.AdminDashboardUsersPage(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 def build_admin_overview(

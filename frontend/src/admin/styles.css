@@ -106,6 +106,40 @@ button {
   gap: 10px;
 }
 
+.admin-header-tools,
+.admin-tabs {
+  display: flex;
+  align-items: center;
+}
+
+.admin-header-tools {
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.admin-tabs {
+  min-height: 38px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-tabs button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.admin-tabs button.active {
+  border-bottom-color: var(--blue);
+  color: var(--blue);
+}
+
 .period-control {
   min-height: 38px;
   overflow: hidden;
@@ -155,7 +189,13 @@ button {
 
 .period-control button:focus-visible,
 .refresh-button:focus-visible,
-.admin-state button:focus-visible {
+.admin-state button:focus-visible,
+.admin-tabs button:focus-visible,
+.search-button:focus-visible,
+.clear-button:focus-visible,
+.details-button:focus-visible,
+.pagination button:focus-visible,
+.users-search input:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
@@ -425,6 +465,237 @@ tbody tr:hover {
   font-size: 13px;
 }
 
+.users-view {
+  gap: 20px;
+}
+
+.users-heading,
+.users-heading > div,
+.users-search,
+.users-search > div,
+.pagination,
+.pagination > div,
+.user-identity,
+.activity-pair {
+  display: flex;
+}
+
+.users-heading,
+.pagination {
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.users-heading > div {
+  align-items: baseline;
+  gap: 12px;
+}
+
+.users-heading h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.users-heading span,
+.pagination > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.users-search {
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.users-search label {
+  width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.users-search > div {
+  width: 100%;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.users-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid #c6d2db;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.search-button,
+.clear-button,
+.details-button,
+.pagination button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #c6d2db;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.search-button {
+  min-height: 42px;
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #ffffff;
+}
+
+.clear-button {
+  min-height: 42px;
+}
+
+.users-table {
+  min-width: 1160px;
+}
+
+.user-identity {
+  min-width: 190px;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-initial {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 6px;
+  background: #e8f1f8;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.user-identity div,
+.activity-pair {
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.user-identity span,
+.activity-pair span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.users-table code,
+.user-detail code {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.user-detail code {
+  white-space: normal;
+  word-break: break-all;
+}
+
+.row-action-cell {
+  text-align: right;
+}
+
+.details-button {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.user-details-row,
+.user-details-row:hover {
+  background: #f8fafb;
+}
+
+.user-details-row > td {
+  padding: 0;
+}
+
+.user-details-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+}
+
+.user-detail {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 14px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.user-detail:nth-child(4n) {
+  border-right: 0;
+}
+
+.user-detail.wide {
+  grid-column: span 2;
+}
+
+.user-detail span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.user-detail strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.user-detail a {
+  color: var(--blue);
+}
+
+.users-empty,
+.users-loading {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pagination {
+  padding-top: 2px;
+}
+
+.pagination > div {
+  gap: 8px;
+}
+
+.pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .admin-state {
   min-height: 100vh;
   display: grid;
@@ -445,6 +716,17 @@ tbody tr:hover {
 }
 
 @media (max-width: 1100px) {
+  .admin-header {
+    align-items: flex-start;
+  }
+
+  .admin-header-tools {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 0;
+  }
+
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -464,6 +746,18 @@ tbody tr:hover {
   .detail-strip div:nth-child(-n + 3) {
     border-bottom: 1px solid var(--line);
   }
+
+  .user-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .user-detail:nth-child(4n) {
+    border-right: 1px solid var(--line);
+  }
+
+  .user-detail:nth-child(2n) {
+    border-right: 0;
+  }
 }
 
 @media (max-width: 760px) {
@@ -482,6 +776,20 @@ tbody tr:hover {
   .admin-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .admin-header-tools {
+    width: 100%;
+    align-items: stretch;
+    padding: 0 0 16px;
+  }
+
+  .admin-tabs {
+    width: 100%;
+  }
+
+  .admin-tabs button {
+    flex: 1;
   }
 
   .period-control {
@@ -524,5 +832,45 @@ tbody tr:hover {
   .section-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .users-heading {
+    align-items: flex-start;
+  }
+
+  .users-heading > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .users-search > div {
+    flex-wrap: wrap;
+  }
+
+  .users-search input {
+    flex: 1 0 100%;
+  }
+
+  .search-button,
+  .clear-button {
+    flex: 1;
+  }
+
+  .user-details-grid {
+    position: sticky;
+    left: 0;
+    width: calc(100vw - 30px);
+    grid-template-columns: 1fr;
+  }
+
+  .user-detail,
+  .user-detail:nth-child(2n),
+  .user-detail:nth-child(4n) {
+    border-right: 0;
+  }
+
+  .user-detail.wide {
+    grid-column: auto;
   }
 }

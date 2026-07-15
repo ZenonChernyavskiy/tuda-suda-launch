@@ -15,6 +15,7 @@ from app.admin_statistics import (  # noqa: E402
     build_admin_activity,
     build_admin_overview,
     build_admin_timeseries,
+    build_admin_users_page,
 )
 from app.database import Base  # noqa: E402
 
@@ -60,6 +61,14 @@ class AdminStatisticsTestCase(unittest.TestCase):
             username="sender",
             first_name="Sender",
             ton_wallet_address="wallet-1",
+            ton_wallet_connected_at=self.now - timedelta(days=30),
+            referral_code="SEND1001",
+            karma=15,
+            reputation=7,
+            risk_score=1,
+            community_weight=8,
+            total_sent=3,
+            total_received=2,
             created_at=self.now - timedelta(days=40),
             last_active_at=self.now - timedelta(hours=1),
         )
@@ -85,6 +94,11 @@ class AdminStatisticsTestCase(unittest.TestCase):
 
         self.db.add_all(
             [
+                models.AssetBalance(
+                    user_id=sender.id,
+                    asset_id=asset.id,
+                    balance_units=25 * TDSD,
+                ),
                 models.AssetGift(
                     sender_id=sender.id,
                     receiver_id=receiver.id,
@@ -276,6 +290,42 @@ class AdminStatisticsTestCase(unittest.TestCase):
         self.assertEqual(failed.error, "Payout failed")
         self.assertNotIn("1002", failed.user)
         self.assertEqual(result.recent_gifts[0].sender, "@sender")
+
+    def test_users_page_excludes_system_users_and_includes_saved_data(self) -> None:
+        result = build_admin_users_page(
+            self.db,
+            limit=2,
+            offset=0,
+        )
+
+        self.assertEqual(result.total, 3)
+        self.assertEqual(len(result.items), 2)
+        self.assertEqual(result.items[0].telegram_id, "1003")
+
+        sender_page = build_admin_users_page(
+            self.db,
+            limit=10,
+            offset=0,
+            query="wallet-1",
+        )
+        self.assertEqual(sender_page.total, 1)
+        sender = sender_page.items[0]
+        self.assertEqual(sender.username, "sender")
+        self.assertEqual(sender.tdsd_balance_display, "25")
+        self.assertEqual(sender.referral_code, "SEND1001")
+        self.assertEqual(sender.karma, 15)
+
+    def test_users_page_supports_pagination_and_referrer_label(self) -> None:
+        second_page = build_admin_users_page(
+            self.db,
+            limit=1,
+            offset=1,
+        )
+
+        self.assertEqual(second_page.total, 3)
+        self.assertEqual(len(second_page.items), 1)
+        self.assertEqual(second_page.items[0].telegram_id, "1002")
+        self.assertEqual(second_page.items[0].referrer, "@sender")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 import { adminApi } from "./api.js";
 
@@ -9,6 +9,7 @@ const PERIODS = [
   { id: "30d", label: "30 дней", chartDays: 30 },
   { id: "all", label: "Всё время", chartDays: 90 },
 ];
+const USERS_PAGE_SIZE = 50;
 
 const integerFormatter = new Intl.NumberFormat("ru-RU");
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
@@ -27,9 +28,32 @@ function formatInteger(value) {
   return integerFormatter.format(Number(value || 0));
 }
 
+function formatUsersCount(value) {
+  const count = Number(value || 0);
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  let noun = "пользователей";
+  if (mod100 < 11 || mod100 > 14) {
+    if (mod10 === 1) noun = "пользователь";
+    else if (mod10 >= 2 && mod10 <= 4) noun = "пользователя";
+  }
+  return `${formatInteger(count)} ${noun}`;
+}
+
 function formatDate(value) {
   if (!value) return "—";
   return dateFormatter.format(new Date(value));
+}
+
+function compactWallet(value) {
+  if (!value) return "Не подключён";
+  if (value.length <= 18) return value;
+  return `${value.slice(0, 8)}…${value.slice(-8)}`;
+}
+
+function userInitial(user) {
+  const value = user.first_name || user.username || user.telegram_id || "U";
+  return value.trim().slice(0, 1).toUpperCase();
 }
 
 function statusLabel(status) {
@@ -191,7 +215,246 @@ function GiftsTable({ rows }) {
   );
 }
 
+function UserDetail({ label, children, wide = false }) {
+  return (
+    <div className={wide ? "user-detail wide" : "user-detail"}>
+      <span>{label}</span>
+      <strong>{children || "—"}</strong>
+    </div>
+  );
+}
+
+function UsersTable({ rows }) {
+  const [expandedUserId, setExpandedUserId] = useState(null);
+
+  if (!rows.length) {
+    return <div className="users-empty">Пользователи не найдены</div>;
+  }
+
+  return (
+    <div className="table-frame users-table-frame">
+      <table className="users-table">
+        <thead>
+          <tr>
+            <th>Пользователь</th>
+            <th>Telegram ID</th>
+            <th>Баланс TDSD</th>
+            <th>TON-кошелёк</th>
+            <th>Подарки</th>
+            <th>Последняя активность</th>
+            <th aria-label="Действия" />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((user) => {
+            const isExpanded = expandedUserId === user.id;
+            return (
+              <Fragment key={user.id}>
+                <tr>
+                  <td>
+                    <div className="user-identity">
+                      <span className="user-initial">{userInitial(user)}</span>
+                      <div>
+                        <strong>{user.first_name || `User #${user.id}`}</strong>
+                        <span>{user.username ? `@${user.username}` : "Без username"}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td><code>{user.telegram_id}</code></td>
+                  <td><strong>{user.tdsd_balance_display}</strong></td>
+                  <td>
+                    <code className={user.ton_wallet_address ? "" : "muted-cell"}>
+                      {compactWallet(user.ton_wallet_address)}
+                    </code>
+                  </td>
+                  <td>
+                    <span className="activity-pair">
+                      <span>Отправлено {formatInteger(user.total_sent)}</span>
+                      <span>Получено {formatInteger(user.total_received)}</span>
+                    </span>
+                  </td>
+                  <td>{formatDate(user.last_active_at)}</td>
+                  <td className="row-action-cell">
+                    <button
+                      aria-expanded={isExpanded}
+                      className="details-button"
+                      onClick={() => setExpandedUserId(isExpanded ? null : user.id)}
+                      type="button"
+                    >
+                      {isExpanded ? "Скрыть" : "Подробнее"}
+                    </button>
+                  </td>
+                </tr>
+                {isExpanded ? (
+                  <tr className="user-details-row">
+                    <td colSpan="7">
+                      <div className="user-details-grid">
+                        <UserDetail label="Внутренний ID">{`#${user.id}`}</UserDetail>
+                        <UserDetail label="Имя">{user.first_name}</UserDetail>
+                        <UserDetail label="Username">
+                          {user.username ? `@${user.username}` : null}
+                        </UserDetail>
+                        <UserDetail label="Фото профиля">
+                          {user.photo_url ? (
+                            <a href={user.photo_url} rel="noreferrer" target="_blank">Открыть</a>
+                          ) : null}
+                        </UserDetail>
+                        <UserDetail label="TON-кошелёк" wide>
+                          <code>{user.ton_wallet_address || "Не подключён"}</code>
+                        </UserDetail>
+                        <UserDetail label="Кошелёк сохранён">
+                          {formatDate(user.ton_wallet_connected_at)}
+                        </UserDetail>
+                        <UserDetail label="Баланс TDSD">
+                          {`${user.tdsd_balance_display} TDSD`}
+                        </UserDetail>
+                        <UserDetail label="Сохранённый TON-баланс">
+                          {`${user.ton_balance_display} TON`}
+                        </UserDetail>
+                        <UserDetail label="Внутренний баланс">{formatInteger(user.balance)}</UserDetail>
+                        <UserDetail label="Карма">{formatInteger(user.karma)}</UserDetail>
+                        <UserDetail label="Репутация">{formatInteger(user.reputation)}</UserDetail>
+                        <UserDetail label="Риск">{formatInteger(user.risk_score)}</UserDetail>
+                        <UserDetail label="Вес сообщества">{formatInteger(user.community_weight)}</UserDetail>
+                        <UserDetail label="Реферальный код">{user.referral_code}</UserDetail>
+                        <UserDetail label="Пригласил">{user.referrer}</UserDetail>
+                        <UserDetail label="Дата приглашения">{formatDate(user.referred_at)}</UserDetail>
+                        <UserDetail label="Регистрация">{formatDate(user.created_at)}</UserDetail>
+                        <UserDetail label="Последняя активность">{formatDate(user.last_active_at)}</UserDetail>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function UsersView({ knownTotal }) {
+  const [queryInput, setQueryInput] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [usersPage, setUsersPage] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadUsers = useCallback(async (background = false) => {
+    if (background) setRefreshing(true);
+    else setLoading(true);
+    setError("");
+    try {
+      const result = await adminApi.getUsers({
+        query: submittedQuery,
+        limit: USERS_PAGE_SIZE,
+        offset: page * USERS_PAGE_SIZE,
+      });
+      setUsersPage(result);
+    } catch (loadError) {
+      setError(loadError.message || "Не удалось загрузить пользователей");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [page, submittedQuery]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  const submitSearch = (event) => {
+    event.preventDefault();
+    const nextQuery = queryInput.trim();
+    if (nextQuery === submittedQuery && page === 0) {
+      loadUsers(true);
+      return;
+    }
+    setPage(0);
+    setSubmittedQuery(nextQuery);
+  };
+
+  const clearSearch = () => {
+    setQueryInput("");
+    setPage(0);
+    if (submittedQuery) setSubmittedQuery("");
+    else loadUsers(true);
+  };
+
+  const total = usersPage?.total ?? knownTotal ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / USERS_PAGE_SIZE));
+
+  return (
+    <main className="users-view">
+      <section className="users-heading">
+        <div>
+          <h1>Пользователи</h1>
+          <span>{formatUsersCount(total)}</span>
+        </div>
+        <button
+          className="refresh-button"
+          disabled={refreshing}
+          onClick={() => loadUsers(true)}
+          type="button"
+        >
+          {refreshing ? "Обновление" : "Обновить"}
+        </button>
+      </section>
+
+      <form className="users-search" onSubmit={submitSearch}>
+        <label htmlFor="admin-user-search">Поиск пользователей</label>
+        <div>
+          <input
+            autoComplete="off"
+            id="admin-user-search"
+            maxLength="128"
+            onChange={(event) => setQueryInput(event.target.value)}
+            placeholder="Telegram ID, имя, username или TON-кошелёк"
+            type="search"
+            value={queryInput}
+          />
+          <button className="search-button" type="submit">Найти</button>
+          {submittedQuery || queryInput ? (
+            <button className="clear-button" onClick={clearSearch} type="button">Сбросить</button>
+          ) : null}
+        </div>
+      </form>
+
+      {error ? <div className="error-banner">{error}</div> : null}
+      {loading && !usersPage ? (
+        <div className="users-loading">Загрузка пользователей</div>
+      ) : (
+        <UsersTable rows={usersPage?.items || []} />
+      )}
+
+      <section className="pagination" aria-label="Навигация по страницам">
+        <span>Страница {page + 1} из {pageCount}</span>
+        <div>
+          <button
+            disabled={page === 0 || loading}
+            onClick={() => setPage((value) => Math.max(0, value - 1))}
+            type="button"
+          >
+            Назад
+          </button>
+          <button
+            disabled={(page + 1) * USERS_PAGE_SIZE >= total || loading}
+            onClick={() => setPage((value) => value + 1)}
+            type="button"
+          >
+            Далее
+          </button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default function AdminApp() {
+  const [activeView, setActiveView] = useState("overview");
   const [period, setPeriod] = useState("30d");
   const [overview, setOverview] = useState(null);
   const [timeseries, setTimeseries] = useState(null);
@@ -227,10 +490,11 @@ export default function AdminApp() {
   }, [chartDays, period]);
 
   useEffect(() => {
+    if (activeView !== "overview") return undefined;
     loadDashboard();
     const intervalId = window.setInterval(() => loadDashboard(true), 60_000);
     return () => window.clearInterval(intervalId);
-  }, [loadDashboard]);
+  }, [activeView, loadDashboard]);
 
   if (loading && !overview) {
     return (
@@ -314,32 +578,55 @@ export default function AdminApp() {
             <span>Администрирование</span>
           </div>
         </div>
-        <div className="admin-actions">
-          <div className="period-control" aria-label="Период статистики">
-            {PERIODS.map((item) => (
+        <div className="admin-header-tools">
+          <nav className="admin-tabs" aria-label="Разделы админ-панели">
+            <button
+              aria-current={activeView === "overview" ? "page" : undefined}
+              className={activeView === "overview" ? "active" : ""}
+              onClick={() => setActiveView("overview")}
+              type="button"
+            >
+              Обзор
+            </button>
+            <button
+              aria-current={activeView === "users" ? "page" : undefined}
+              className={activeView === "users" ? "active" : ""}
+              onClick={() => setActiveView("users")}
+              type="button"
+            >
+              Пользователи
+            </button>
+          </nav>
+          {activeView === "overview" ? (
+            <div className="admin-actions">
+              <div className="period-control" aria-label="Период статистики">
+                {PERIODS.map((item) => (
+                  <button
+                    className={period === item.id ? "active" : ""}
+                    key={item.id}
+                    onClick={() => setPeriod(item.id)}
+                    type="button"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
               <button
-                className={period === item.id ? "active" : ""}
-                key={item.id}
-                onClick={() => setPeriod(item.id)}
+                className="refresh-button"
+                disabled={refreshing}
+                onClick={() => loadDashboard(true)}
                 type="button"
               >
-                {item.label}
+                {refreshing ? "Обновление" : "Обновить"}
               </button>
-            ))}
-          </div>
-          <button
-            className="refresh-button"
-            disabled={refreshing}
-            onClick={() => loadDashboard(true)}
-            type="button"
-          >
-            {refreshing ? "Обновление" : "Обновить"}
-          </button>
+            </div>
+          ) : null}
         </div>
       </header>
 
-      {error ? <div className="error-banner">{error}</div> : null}
+      {activeView === "overview" && error ? <div className="error-banner">{error}</div> : null}
 
+      {activeView === "overview" ? (
       <main>
         <section className="metric-grid" aria-label="Основные показатели">
           {metrics.map((metric) => <MetricCard key={metric.label} {...metric} />)}
@@ -398,6 +685,9 @@ export default function AdminApp() {
           <GiftsTable rows={activity?.recent_gifts || []} />
         </section>
       </main>
+      ) : (
+        <UsersView knownTotal={overview.users.total} />
+      )}
     </div>
   );
 }

@@ -517,6 +517,40 @@ class AdminDashboardUsersStats(BaseModel):
     wallets_connected: int
 
 
+class AdminDashboardUserItem(BaseModel):
+    id: int
+    telegram_id: str
+    username: str | None
+    first_name: str | None
+    photo_url: str | None
+    balance: int
+    karma: int
+    reputation: int
+    risk_score: int
+    community_weight: int
+    total_sent: int
+    total_received: int
+    ton_balance_nano: int
+    ton_balance_display: str
+    tdsd_balance_units: int
+    tdsd_balance_display: str
+    ton_wallet_address: str | None
+    ton_wallet_connected_at: datetime | None
+    referral_code: str | None
+    referred_by_user_id: int | None
+    referrer: str | None
+    referred_at: datetime | None
+    created_at: datetime
+    last_active_at: datetime | None
+
+
+class AdminDashboardUsersPage(BaseModel):
+    items: list[AdminDashboardUserItem]
+    total: int
+    limit: int
+    offset: int
+
+
 class AdminDashboardGiftStats(BaseModel):
     count: int
     gross_units: int
